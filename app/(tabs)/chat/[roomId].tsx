@@ -12,10 +12,13 @@ import {
 import { Appbar, Avatar, TextInput, IconButton } from 'react-native-paper';
 import { useChat } from '../../../context/ChatContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useTheme } from '../../../context/ThemeContext';
 import { Message, ChatRoom } from '../../../types';
 import { useLocalSearchParams, router } from 'expo-router';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { ThemedContainer } from '@/components/ThemedContainer';
+import { Colors } from '@/constants/Colors';
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
@@ -26,8 +29,8 @@ const DEMO_EMPLOYEES = [
   { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
 ];
 
-// Компонент для отображения даты сообщений в чате
-const DateSeparator = ({ date }: { date: Date }) => {
+// Компонент для отображения даты сообщений в чате (с поддержкой темной темы)
+const DateSeparator = ({ date, isDark }: { date: Date, isDark: boolean }) => {
   let dateText = '';
   
   if (isToday(date)) {
@@ -40,7 +43,7 @@ const DateSeparator = ({ date }: { date: Date }) => {
   
   return (
     <View style={styles.dateSeparator}>
-      <Text style={styles.dateSeparatorText}>{dateText}</Text>
+      <Text style={[styles.dateSeparatorText, { color: isDark ? '#888' : '#999' }]}>{dateText}</Text>
     </View>
   );
 };
@@ -49,6 +52,7 @@ export default function ChatRoomScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const { chatRooms, messages, addMessage, getMessagesForChat, markMessageAsRead } = useChat();
   const { user } = useAuth();
+  const { isDark } = useTheme();
   const [newMessage, setNewMessage] = useState('');
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [currentChatRoom, setCurrentChatRoom] = useState<ChatRoom | null>(null);
@@ -187,100 +191,122 @@ export default function ChatRoomScreen() {
     return result;
   };
 
-  const renderMessageItem = ({ item }: { item: Message | { id: string, isDateSeparator: true, date: Date } }) => {
-    if ('isDateSeparator' in item) {
-      return <DateSeparator date={item.date} />;
-    }
-    
-    const isOwnMessage = item.senderId === user?.id;
-    const senderInfo = getUserInfo(item.senderId);
-    
-    return (
-      <View style={[
-        styles.messageContainer,
-        isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer
-      ]}>
-        {!isOwnMessage && !currentChatRoom?.isGroupChat && (
-          <Avatar.Image
-            size={36}
-            source={{ uri: senderInfo.avatarUrl }}
-            style={styles.messageAvatar}
-          />
-        )}
-        
-        <View style={[
-          styles.messageBubble,
-          isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble
-        ]}>
-          {currentChatRoom?.isGroupChat && !isOwnMessage && (
-            <Text style={styles.messageSender}>{senderInfo.name}</Text>
-          )}
-          
-          <Text style={styles.messageText}>{item.text}</Text>
-          <Text style={styles.messageTime}>{formatMessageTime(item.timestamp)}</Text>
-        </View>
-      </View>
-    );
+  // Динамические стили для темной темы
+  const dynamicStyles = {
+    header: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+    },
+    headerTitle: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    messageContainer: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+    },
+    ownMessage: {
+      backgroundColor: isDark ? '#1e476b' : '#e3f2fd',
+    },
+    otherMessage: {
+      backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+    },
+    messageText: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    messageTime: {
+      color: isDark ? '#aaa' : '#888',
+    },
+    senderName: {
+      color: isDark ? '#aaa' : '#666',
+    },
+    inputContainer: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      borderTopColor: isDark ? '#333' : '#e0e0e0',
+    },
+    input: {
+      backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+    },
   };
 
   return (
-    <View style={styles.container}>
-      <Appbar.Header style={styles.header}>
-        <Appbar.BackAction onPress={handleBackPress} />
-        {currentChatRoom && (
-          <>
-            {currentChatRoom.isGroupChat ? (
-              <Avatar.Icon
-                size={40}
-                icon="account-group"
-                style={styles.groupAvatar}
-              />
-            ) : (
-              <Avatar.Image
-                size={40}
-                source={{ 
-                  uri: getUserInfo(
-                    currentChatRoom.participants.find(id => id !== user?.id) || ''
-                  ).avatarUrl 
-                }}
-              />
-            )}
-            <Appbar.Content 
-              title={currentChatRoom.name}
-              titleStyle={styles.headerTitle}
+    <ThemedContainer style={styles.container}>
+      <Appbar.Header style={dynamicStyles.header}>
+        <Appbar.BackAction onPress={handleBackPress} color={isDark ? Colors.dark.text : '#333'} />
+        <View style={styles.headerContent}>
+          {currentChatRoom?.isGroupChat ? (
+            <Avatar.Icon size={40} icon="account-group" style={styles.groupAvatar} />
+          ) : (
+            <Avatar.Image 
+              size={40} 
+              source={{ 
+                uri: getUserInfo(
+                  currentChatRoom?.participants.find(id => id !== user?.id) || ''
+                ).avatarUrl 
+              }} 
             />
-          </>
-        )}
+          )}
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerTitle, dynamicStyles.headerTitle]} numberOfLines={1}>
+              {currentChatRoom?.name || 'Чат'}
+            </Text>
+          </View>
+        </View>
       </Appbar.Header>
       
       <FlatList
         ref={flatListRef}
         data={messagesWithDateSeparators()}
-        renderItem={renderMessageItem}
-        keyExtractor={item => item.id}
+        renderItem={({ item }) => {
+          if ('isDateSeparator' in item) {
+            return <DateSeparator date={item.date} isDark={isDark} />;
+          }
+          
+          const isOwnMessage = item.senderId === user?.id;
+          const senderInfo = getUserInfo(item.senderId);
+          
+          return (
+            <View style={[
+              styles.messageContainer,
+              isOwnMessage ? [styles.ownMessageContainer, dynamicStyles.ownMessage] : [styles.otherMessageContainer, dynamicStyles.otherMessage]
+            ]}>
+              {!isOwnMessage && currentChatRoom?.isGroupChat && (
+                <Text style={[styles.senderName, dynamicStyles.senderName]}>
+                  {senderInfo.name}
+                </Text>
+              )}
+              
+              <Text style={[styles.messageText, dynamicStyles.messageText]}>
+                {item.text}
+              </Text>
+              
+              <Text style={[styles.messageTime, dynamicStyles.messageTime]}>
+                {formatMessageTime(item.timestamp)}
+              </Text>
+            </View>
+          );
+        }}
+        keyExtractor={(item) => ('isDateSeparator' in item) ? item.id : item.id}
         contentContainerStyle={styles.messagesList}
-        onLayout={() => {
-          if (flatListRef.current) {
-            flatListRef.current.scrollToEnd({ animated: true });
+        onContentSizeChange={() => {
+          if (chatMessages.length > 0) {
+            flatListRef.current?.scrollToEnd({ animated: false });
           }
         }}
       />
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
           <TextInput
             ref={inputRef}
+            style={[styles.input, dynamicStyles.input]}
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder="Введите сообщение..."
-            style={styles.input}
-            mode="outlined"
-            outlineStyle={styles.inputOutline}
+            placeholderTextColor={isDark ? '#888' : '#999'}
+            mode="flat"
             multiline
-            maxLength={1000}
+            theme={{ colors: { primary: '#2196F3' } }}
             right={
               <TextInput.Icon
                 icon="send"
@@ -293,7 +319,7 @@ export default function ChatRoomScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </ThemedContainer>
   );
 }
 
@@ -392,5 +418,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerInfo: {
+    flexDirection: 'column',
+    marginLeft: 8,
   },
 }); 

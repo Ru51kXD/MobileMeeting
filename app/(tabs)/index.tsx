@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated } from 'react-native';
 import { Card, Button, FAB, Avatar } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { useTask } from '../../context/TaskContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Task, Meeting } from '../../types';
+import { Task, Meeting, UserRole, TaskStatus, TaskPriority } from '../../types/index';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
+import { useTheme } from '../../context/ThemeContext';
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
@@ -44,45 +45,35 @@ const DEMO_MEETINGS: Meeting[] = [
   },
 ];
 
-// Константы для приоритетов задач
-const PRIORITY_LOW = 'LOW';
-const PRIORITY_MEDIUM = 'MEDIUM';
-const PRIORITY_HIGH = 'HIGH';
-const PRIORITY_URGENT = 'URGENT';
-
-// Константы для статусов задач
-const STATUS_ASSIGNED = 'ASSIGNED';
-const STATUS_IN_PROGRESS = 'IN_PROGRESS';
-const STATUS_COMPLETED = 'COMPLETED';
-const STATUS_CANCELLED = 'CANCELLED';
-
-// Определим объект TaskStatus для использования в коде
-const TaskStatus = {
-  ASSIGNED: STATUS_ASSIGNED,
-  IN_PROGRESS: STATUS_IN_PROGRESS,
-  COMPLETED: STATUS_COMPLETED,
-  CANCELLED: STATUS_CANCELLED
-};
-
-// Константы для ролей пользователей
-const ROLE_ADMIN = 'ADMIN';
-const ROLE_MANAGER = 'MANAGER';
-const ROLE_EMPLOYEE = 'EMPLOYEE';
-
-// Определим объект UserRole для использования в коде
-const UserRole = {
-  ADMIN: ROLE_ADMIN,
-  MANAGER: ROLE_MANAGER,
-  EMPLOYEE: ROLE_EMPLOYEE
-};
-
 export default function HomeScreen() {
   const { user } = useAuth();
   const { tasks, refreshTasks } = useTask();
+  const { isDark, themeAnimation } = useTheme();
   const [upcomingMeetings, setUpcomingMeetings] = useState<Meeting[]>([]);
   const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-
+  
+  // Создаем анимированные значения цветов, используя themeAnimation
+  const backgroundColor = themeAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#ffffff', '#121212']
+  });
+  
+  const textColor = themeAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#333333', '#ffffff']
+  });
+  
+  const subTextColor = themeAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#555555', '#aaaaaa']
+  });
+  
+  const cardBackgroundColor = themeAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#ffffff', '#1e1e1e']
+  });
+  
   useEffect(() => {
     loadData();
   }, [tasks]);
@@ -165,7 +156,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { backgroundColor }]}>
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2196F3']} />
@@ -181,19 +172,31 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="calendar-clock" size={24} color="#1E88E5" />
-            <Text style={styles.sectionTitle}>Ближайшие митинги</Text>
+            <Animated.Text style={[styles.sectionTitle, { color: textColor }]}>
+              Ближайшие митинги
+            </Animated.Text>
           </View>
 
           {upcomingMeetings.length > 0 ? (
             upcomingMeetings.map(meeting => (
-              <Card key={meeting.id} style={styles.meetingCard}>
+              <Animated.View 
+                key={meeting.id} 
+                style={[
+                  styles.meetingCard, 
+                  { backgroundColor: cardBackgroundColor }
+                ]}
+              >
                 <View style={styles.meetingContent}>
                   <View style={styles.meetingInfo}>
-                    <Text style={styles.meetingTitle}>{meeting.title}</Text>
-                    <Text style={styles.meetingTime}>
+                    <Animated.Text style={[styles.meetingTitle, { color: textColor }]}>
+                      {meeting.title}
+                    </Animated.Text>
+                    <Animated.Text style={[styles.meetingTime, { color: subTextColor }]}>
                       {formatDate(meeting.startTime)}, {formatTime(meeting.startTime)} - {formatTime(meeting.endTime)}
-                    </Text>
-                    <Text style={styles.meetingDescription}>{meeting.description}</Text>
+                    </Animated.Text>
+                    <Animated.Text style={[styles.meetingDescription, { color: subTextColor }]}>
+                      {meeting.description}
+                    </Animated.Text>
                   </View>
                   <TouchableOpacity 
                     style={styles.viewButton} 
@@ -202,10 +205,12 @@ export default function HomeScreen() {
                     <Text style={styles.viewButtonText}>Просмотреть</Text>
                   </TouchableOpacity>
                 </View>
-              </Card>
+              </Animated.View>
             ))
           ) : (
-            <Text style={styles.emptyText}>Нет запланированных митингов</Text>
+            <Animated.Text style={[styles.emptyText, { color: subTextColor }]}>
+              Нет запланированных митингов
+            </Animated.Text>
           )}
 
           <TouchableOpacity 
@@ -220,12 +225,20 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="checkbox-marked-outline" size={24} color="#1E88E5" />
-            <Text style={styles.sectionTitle}>Мои задачи</Text>
+            <Animated.Text style={[styles.sectionTitle, { color: textColor }]}>
+              Мои задачи
+            </Animated.Text>
           </View>
 
           {upcomingTasks.length > 0 ? (
             upcomingTasks.map(task => (
-              <Card key={task.id} style={styles.taskCard}>
+              <Animated.View 
+                key={task.id} 
+                style={[
+                  styles.taskCard, 
+                  { backgroundColor: cardBackgroundColor }
+                ]}
+              >
                 <TouchableOpacity
                   style={styles.taskContent}
                   onPress={() => handleViewTask(task.id)}
@@ -237,10 +250,19 @@ export default function HomeScreen() {
                         { backgroundColor: getPriorityColor(task.priority) }
                       ]} 
                     />
-                    <Text style={styles.taskTitle}>{task.title}</Text>
+                    <Animated.Text style={[styles.taskTitle, { color: textColor }]}>
+                      {task.title}
+                    </Animated.Text>
                   </View>
-                  <Text style={styles.taskDeadline}>Срок: {formatDate(task.deadline)}</Text>
-                  <Text style={styles.taskDescription} numberOfLines={2}>{task.description}</Text>
+                  <Animated.Text style={[styles.taskDeadline, { color: subTextColor }]}>
+                    Срок: {formatDate(task.deadline)}
+                  </Animated.Text>
+                  <Animated.Text 
+                    style={[styles.taskDescription, { color: subTextColor }]} 
+                    numberOfLines={2}
+                  >
+                    {task.description}
+                  </Animated.Text>
                   <View style={styles.taskFooter}>
                     <View style={styles.assigneeContainer}>
                       <Avatar.Image 
@@ -248,19 +270,21 @@ export default function HomeScreen() {
                         source={{ uri: getEmployeeById(task.assignedTo).avatarUrl }} 
                         style={styles.assigneeAvatar}
                       />
-                      <Text style={styles.assigneeName}>
+                      <Animated.Text style={[styles.assigneeName, { color: subTextColor }]}>
                         {getEmployeeById(task.assignedTo).name}
-                      </Text>
+                      </Animated.Text>
                     </View>
                     <View style={[styles.statusChip, { backgroundColor: getStatusColor(task.status) }]}>
                       <Text style={styles.statusText}>{getStatusText(task.status)}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
-              </Card>
+              </Animated.View>
             ))
           ) : (
-            <Text style={styles.emptyText}>Нет активных задач</Text>
+            <Animated.Text style={[styles.emptyText, { color: subTextColor }]}>
+              Нет активных задач
+            </Animated.Text>
           )}
 
           <TouchableOpacity 
@@ -281,20 +305,20 @@ export default function HomeScreen() {
         onPress={handleAddTask}
         label="Новая задача"
       />
-    </View>
+    </Animated.View>
   );
 }
 
 // Вспомогательные функции для стилей задач
 const getPriorityColor = (priority: string) => {
   switch (priority) {
-    case PRIORITY_LOW:
+    case TaskPriority.LOW:
       return '#28a745';
-    case PRIORITY_MEDIUM:
+    case TaskPriority.MEDIUM:
       return '#ffc107';
-    case PRIORITY_HIGH:
+    case TaskPriority.HIGH:
       return '#fd7e14';
-    case PRIORITY_URGENT:
+    case TaskPriority.URGENT:
       return '#dc3545';
     default:
       return '#6c757d';
@@ -334,7 +358,7 @@ const getStatusColor = (status: TaskStatus) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F0F0',
+    padding: 16,
   },
   welcomeSection: {
     paddingHorizontal: 16,

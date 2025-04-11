@@ -2,17 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { Calendar, CalendarProps, DateData } from 'react-native-calendars';
 import { Button, FAB, ActivityIndicator, Chip, Dialog, Portal } from 'react-native-paper';
-import { Meeting, UserRole } from '../../../types';
+import { Meeting, UserRole } from '../../../types/index';
 import { useAuth } from '../../../context/AuthContext';
 import { useMeeting } from '../../../context/MeetingContext';
+import { useTheme } from '../../../context/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
+import { ThemedContainer } from '@/components/ThemedContainer';
+import { Colors } from '@/constants/Colors';
 
 export default function MeetingsScreen() {
   const { user } = useAuth();
   const { meetings: allMeetings, refreshMeetings } = useMeeting();
+  const { isDark } = useTheme();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [markedDates, setMarkedDates] = useState<any>({});
@@ -101,51 +105,60 @@ export default function MeetingsScreen() {
     return format(dateObj, 'dd MMMM yyyy, HH:mm', { locale: ru });
   };
 
-  const renderMeetingItem = ({ item }: { item: Meeting }) => {
-    const isUpcoming = new Date(item.startTime) > new Date();
-    
-    return (
-      <TouchableOpacity
-        style={[styles.meetingItem, !isUpcoming && styles.pastMeetingItem]}
-        onPress={() => handleMeetingPress(item)}
-      >
-        <View style={styles.meetingHeader}>
-          <Text style={styles.meetingTitle} numberOfLines={1}>{item.title}</Text>
-          <Chip style={styles.timeChip}>
-            {formatMeetingTime(item.startTime, item.endTime)}
-          </Chip>
-        </View>
-        
-        {item.description && (
-          <Text style={styles.meetingDescription} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-        
-        <View style={styles.meetingFooter}>
-          <View style={styles.organizerContainer}>
-            <MaterialCommunityIcons name="account" size={16} color="#666" />
-            <Text style={styles.organizerText}>
-              {item.organizer === user?.id ? 'Вы (организатор)' : 'Организатор'}
-            </Text>
-          </View>
-          
-          <View style={styles.participantsContainer}>
-            <MaterialCommunityIcons name="account-group" size={16} color="#666" />
-            <Text style={styles.participantsText}>
-              {item.participants.length} участников
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
+  // Динамические стили в зависимости от темы
+  const dynamicStyles = {
+    calendarContainer: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      borderBottomColor: isDark ? '#333' : '#e0e0e0',
+    },
+    calendar: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+    },
+    meetingsContainer: {
+      backgroundColor: isDark ? Colors.dark.background : Colors.light.background,
+    },
+    meetingsHeader: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      borderBottomColor: isDark ? '#333' : '#e0e0e0',
+    },
+    meetingsTitle: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    meetingsCount: {
+      color: isDark ? '#888' : '#666',
+    },
+    meetingItem: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      shadowColor: isDark ? '#000' : '#000',
+    },
+    pastMeetingItem: {
+      opacity: 0.7,
+    },
+    meetingTitle: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    meetingDescription: {
+      color: isDark ? '#aaa' : '#666',
+    },
+    organizerText: {
+      color: isDark ? '#888' : '#666',
+    },
+    participantsText: {
+      color: isDark ? '#888' : '#666',
+    },
+    dialogContent: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    dialogSubcontent: {
+      color: isDark ? '#aaa' : '#666',
+    },
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <ThemedContainer style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
-      </View>
+      </ThemedContainer>
     );
   }
 
@@ -157,10 +170,10 @@ export default function MeetingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.calendarContainer}>
+    <ThemedContainer>
+      <View style={[styles.calendarContainer, dynamicStyles.calendarContainer]}>
         <Calendar
-          style={styles.calendar}
+          style={[styles.calendar, dynamicStyles.calendar]}
           current={format(selectedDate, 'yyyy-MM-dd')}
           onDayPress={onDayPress}
           monthFormat="MMMM yyyy"
@@ -169,17 +182,17 @@ export default function MeetingsScreen() {
           markingType="multi-dot"
           markedDates={markedDates}
           theme={{
-            calendarBackground: '#ffffff',
-            textSectionTitleColor: '#b6c1cd',
+            calendarBackground: isDark ? '#1e1e1e' : '#ffffff',
+            textSectionTitleColor: isDark ? '#888' : '#b6c1cd',
             selectedDayBackgroundColor: '#2196F3',
             selectedDayTextColor: '#ffffff',
             todayTextColor: '#2196F3',
-            dayTextColor: '#2d4150',
-            textDisabledColor: '#d9e1e8',
+            dayTextColor: isDark ? Colors.dark.text : '#2d4150',
+            textDisabledColor: isDark ? '#555' : '#d9e1e8',
             dotColor: '#2196F3',
             selectedDotColor: '#ffffff',
             arrowColor: '#2196F3',
-            monthTextColor: '#2d4150',
+            monthTextColor: isDark ? Colors.dark.text : '#2d4150',
             indicatorColor: '#2196F3',
             textDayFontWeight: '300',
             textMonthFontWeight: 'bold',
@@ -188,78 +201,128 @@ export default function MeetingsScreen() {
         />
       </View>
       
-      <View style={styles.meetingsContainer}>
-        <View style={styles.meetingsHeader}>
-          <Text style={styles.meetingsTitle}>
+      <View style={[styles.meetingsContainer, dynamicStyles.meetingsContainer]}>
+        <View style={[styles.meetingsHeader, dynamicStyles.meetingsHeader]}>
+          <Text style={[styles.meetingsTitle, dynamicStyles.meetingsTitle]}>
             Митинги на {format(selectedDate, 'd MMMM', { locale: ru })}
           </Text>
-          <Text style={styles.meetingsCount}>
+          <Text style={[styles.meetingsCount, dynamicStyles.meetingsCount]}>
             {selectedDateMeetings.length} {getCorrectWordForm(selectedDateMeetings.length)}
           </Text>
         </View>
         
         <FlatList
           data={selectedDateMeetings}
-          renderItem={renderMeetingItem}
-          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.meetingItem, 
+                dynamicStyles.meetingItem,
+                new Date(item.startTime) < new Date() && [styles.pastMeetingItem, dynamicStyles.pastMeetingItem]
+              ]}
+              onPress={() => handleMeetingPress(item)}
+            >
+              <View style={styles.meetingHeader}>
+                <Text style={[styles.meetingTitle, dynamicStyles.meetingTitle]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Chip style={styles.timeChip}>
+                  {formatMeetingTime(item.startTime, item.endTime)}
+                </Chip>
+              </View>
+              
+              {item.description && (
+                <Text style={[styles.meetingDescription, dynamicStyles.meetingDescription]} numberOfLines={2}>
+                  {item.description}
+                </Text>
+              )}
+              
+              <View style={styles.meetingFooter}>
+                <View style={styles.organizerContainer}>
+                  <MaterialCommunityIcons name="account" size={16} color={isDark ? '#888' : '#666'} />
+                  <Text style={[styles.organizerText, dynamicStyles.organizerText]}>
+                    {item.organizer === user?.id ? 'Вы (организатор)' : 'Организатор'}
+                  </Text>
+                </View>
+                
+                <View style={styles.participantsContainer}>
+                  <MaterialCommunityIcons name="account-group" size={16} color={isDark ? '#888' : '#666'} />
+                  <Text style={[styles.participantsText, dynamicStyles.participantsText]}>
+                    {item.participants.length} участников
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+          keyExtractor={item => item.id}
           contentContainerStyle={styles.meetingsList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#2196F3"]}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="calendar-blank" size={64} color="#ccc" />
-              <Text style={styles.emptyText}>Нет запланированных митингов на этот день</Text>
+              <MaterialCommunityIcons name="calendar-blank" size={48} color={isDark ? '#555' : '#ccc'} />
+              <Text style={{ marginTop: 12, color: isDark ? '#888' : '#666', textAlign: 'center' }}>
+                Нет митингов на выбранную дату
+              </Text>
             </View>
-          }
-          refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={onRefresh}
-              colors={['#2196F3']}
-            />
           }
         />
       </View>
       
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={goToCreateMeeting}
-        color="#ffffff"
-      />
+      {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
+        <FAB
+          icon="plus"
+          style={styles.fab}
+          onPress={goToCreateMeeting}
+        />
+      )}
       
       <Portal>
-        <Dialog 
+        <Dialog
           visible={detailDialogVisible}
           onDismiss={() => setDetailDialogVisible(false)}
-          style={styles.dialog}
+          style={{ backgroundColor: isDark ? '#1e1e1e' : 'white' }}
         >
           {selectedMeeting && (
             <>
-              <Dialog.Title>{selectedMeeting.title}</Dialog.Title>
+              <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>
+                {selectedMeeting.title}
+              </Dialog.Title>
               <Dialog.Content>
-                <View style={styles.dialogSection}>
-                  <Text style={styles.dialogSectionTitle}>Дата и время</Text>
-                  <Text style={styles.dialogText}>
+                {selectedMeeting.description && (
+                  <Text style={[{ marginBottom: 16 }, dynamicStyles.dialogSubcontent]}>
+                    {selectedMeeting.description}
+                  </Text>
+                )}
+                
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={[{ fontWeight: 'bold', marginBottom: 4 }, dynamicStyles.dialogContent]}>
+                    Дата и время:
+                  </Text>
+                  <Text style={dynamicStyles.dialogSubcontent}>
                     {formatDetailDate(selectedMeeting.startTime)} - {format(new Date(selectedMeeting.endTime), 'HH:mm')}
                   </Text>
                 </View>
                 
-                {selectedMeeting.description && (
-                  <View style={styles.dialogSection}>
-                    <Text style={styles.dialogSectionTitle}>Описание</Text>
-                    <Text style={styles.dialogText}>{selectedMeeting.description}</Text>
-                  </View>
-                )}
-                
-                <View style={styles.dialogSection}>
-                  <Text style={styles.dialogSectionTitle}>Организатор</Text>
-                  <Text style={styles.dialogText}>
-                    {selectedMeeting.organizer === user?.id ? 'Вы' : 'ID: ' + selectedMeeting.organizer}
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={[{ fontWeight: 'bold', marginBottom: 4 }, dynamicStyles.dialogContent]}>
+                    Расположение:
+                  </Text>
+                  <Text style={dynamicStyles.dialogSubcontent}>
+                    {selectedMeeting.location || 'Не указано'}
                   </Text>
                 </View>
                 
-                <View style={styles.dialogSection}>
-                  <Text style={styles.dialogSectionTitle}>Участники</Text>
-                  <Text style={styles.dialogText}>
+                <View>
+                  <Text style={[{ fontWeight: 'bold', marginBottom: 4 }, dynamicStyles.dialogContent]}>
+                    Участники:
+                  </Text>
+                  <Text style={dynamicStyles.dialogSubcontent}>
                     {selectedMeeting.participants.length} человек
                   </Text>
                 </View>
@@ -271,7 +334,7 @@ export default function MeetingsScreen() {
           )}
         </Dialog>
       </Portal>
-    </View>
+    </ThemedContainer>
   );
 }
 

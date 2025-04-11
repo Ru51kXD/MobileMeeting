@@ -1,24 +1,21 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Image, TouchableOpacity, Switch } from 'react-native';
-import { Avatar, Button, Divider, TextInput, Dialog, Portal } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, Image, TouchableOpacity, Switch, useColorScheme } from 'react-native';
+import { Avatar, Button, Divider, TextInput, Dialog, Portal, useTheme as usePaperTheme } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-
-// Определим UserRole прямо здесь, чтобы избежать проблем с импортом
-const UserRole = {
-  ADMIN: 'ADMIN',
-  MANAGER: 'MANAGER',
-  EMPLOYEE: 'EMPLOYEE'
-};
+import { Colors } from '@/constants/Colors';
+import { UserRole } from '../../types/index';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const paperTheme = usePaperTheme();
   const [editMode, setEditMode] = useState(false);
   const [passwordDialogVisible, setPasswordDialogVisible] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [avatarUri, setAvatarUri] = useState(user?.avatarUrl || 'https://ui-avatars.com/api/?name=Admin+System&background=0D8ABC&color=fff');
   
   const [userData, setUserData] = useState({
@@ -33,6 +30,20 @@ export default function ProfileScreen() {
     newPassword: '',
     confirmPassword: '',
   });
+
+  // Используем isDark из контекста ThemeContext
+  const [darkModeEnabled, setDarkModeEnabled] = useState(isDark);
+
+  // Обновляем локальное состояние при изменении глобальной темы
+  useEffect(() => {
+    setDarkModeEnabled(isDark);
+  }, [isDark]);
+
+  // Обработчик переключения темы
+  const handleThemeToggle = (value: boolean) => {
+    setDarkModeEnabled(value);
+    toggleTheme();
+  };
 
   const handleSaveProfile = () => {
     if (!userData.name.trim()) {
@@ -133,9 +144,9 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container(isDark)}>
       <ScrollView>
-        <View style={styles.header}>
+        <View style={styles.header(isDark)}>
           <View style={styles.avatarContainer}>
             <Avatar.Image
               source={{ uri: avatarUri }}
@@ -153,10 +164,10 @@ export default function ProfileScreen() {
           
           {!editMode ? (
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{userData.name}</Text>
+              <Text style={styles.userName(isDark)}>{userData.name}</Text>
               <Text style={styles.userRole}>{getRoleText(user?.role || UserRole.ADMIN)}</Text>
-              {userData.position && <Text style={styles.userPosition}>{userData.position}</Text>}
-              {userData.department && <Text style={styles.userDepartment}>{userData.department}</Text>}
+              {userData.position && <Text style={styles.userPosition(isDark)}>{userData.position}</Text>}
+              {userData.department && <Text style={styles.userDepartment(isDark)}>{userData.department}</Text>}
             </View>
           ) : (
             <View style={styles.editForm}>
@@ -215,48 +226,48 @@ export default function ProfileScreen() {
           </View>
         </View>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Учетная запись</Text>
+        <View style={styles.section(isDark)}>
+          <Text style={styles.sectionTitle(isDark)}>Учетная запись</Text>
           
           <TouchableOpacity 
-            style={styles.option}
+            style={styles.option(isDark)}
             onPress={handleEmailChange}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="email" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Email</Text>
-              <Text style={styles.optionValue}>{userData.email}</Text>
+              <Text style={styles.optionTitle(isDark)}>Email</Text>
+              <Text style={styles.optionValue(isDark)}>{userData.email}</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.option}
+            style={styles.option(isDark)}
             onPress={() => setPasswordDialogVisible(true)}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="lock" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Пароль</Text>
-              <Text style={styles.optionValue}>Изменить пароль</Text>
+              <Text style={styles.optionTitle(isDark)}>Пароль</Text>
+              <Text style={styles.optionValue(isDark)}>Изменить пароль</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
           </TouchableOpacity>
         </View>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Настройки</Text>
+        <View style={styles.section(isDark)}>
+          <Text style={styles.sectionTitle(isDark)}>Настройки</Text>
           
-          <View style={styles.option}>
+          <View style={styles.option(isDark)}>
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="bell" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Уведомления</Text>
-              <Text style={styles.optionValue}>Получать push-уведомления</Text>
+              <Text style={styles.optionTitle(isDark)}>Уведомления</Text>
+              <Text style={styles.optionValue(isDark)}>Получать push-уведомления</Text>
             </View>
             <Switch
               value={notificationsEnabled}
@@ -266,13 +277,13 @@ export default function ProfileScreen() {
             />
           </View>
           
-          <View style={styles.option}>
+          <View style={styles.option(isDark)}>
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="calendar-sync" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Синхронизация календаря</Text>
-              <Text style={styles.optionValue}>Синхронизировать митинги с календарем</Text>
+              <Text style={styles.optionTitle(isDark)}>Синхронизация календаря</Text>
+              <Text style={styles.optionValue(isDark)}>Синхронизировать митинги с календарем</Text>
             </View>
             <Switch
               value={calendarSyncEnabled}
@@ -282,99 +293,102 @@ export default function ProfileScreen() {
             />
           </View>
           
-          <View style={styles.option}>
+          <View style={styles.option(isDark)}>
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="theme-light-dark" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Темная тема</Text>
-              <Text style={styles.optionValue}>Использовать темную тему</Text>
+              <Text style={styles.optionTitle(isDark)}>Темная тема</Text>
+              <Text style={styles.optionValue(isDark)}>Использовать темную тему</Text>
             </View>
             <Switch
               value={darkModeEnabled}
-              onValueChange={setDarkModeEnabled}
+              onValueChange={handleThemeToggle}
               trackColor={{ false: "#767577", true: "#81b0ff" }}
               thumbColor={darkModeEnabled ? "#2196F3" : "#f4f3f4"}
             />
           </View>
         </View>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Приложение</Text>
+        <View style={styles.section(isDark)}>
+          <Text style={styles.sectionTitle(isDark)}>Приложение</Text>
           
           <TouchableOpacity 
-            style={styles.option}
+            style={styles.option(isDark)}
             onPress={handleAppSettings}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="cog" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Настройки приложения</Text>
-              <Text style={styles.optionValue}>Язык, временная зона и другие настройки</Text>
+              <Text style={styles.optionTitle(isDark)}>Настройки приложения</Text>
+              <Text style={styles.optionValue(isDark)}>Язык, временная зона и другие настройки</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.option}
+            style={styles.option(isDark)}
             onPress={handleHelpSupport}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="help-circle" size={24} color="#2196F3" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>Помощь и поддержка</Text>
-              <Text style={styles.optionValue}>Справка, обратная связь, сообщить о проблеме</Text>
+              <Text style={styles.optionTitle(isDark)}>Помощь и поддержка</Text>
+              <Text style={styles.optionValue(isDark)}>Справка, обратная связь, сообщить о проблеме</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.option, styles.logoutOption]}
+            style={[styles.option(isDark), styles.logoutOption]}
             onPress={handleLogout}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="logout" size={24} color="#F44336" />
             </View>
             <View style={styles.optionContent}>
-              <Text style={[styles.optionTitle, styles.logoutText]}>Выйти из системы</Text>
+              <Text style={[styles.optionTitle(isDark), styles.logoutText]}>Выйти из системы</Text>
             </View>
           </TouchableOpacity>
         </View>
         
         <Portal>
-          <Dialog visible={passwordDialogVisible} onDismiss={() => setPasswordDialogVisible(false)}>
-            <Dialog.Title>Изменение пароля</Dialog.Title>
+          <Dialog 
+            visible={passwordDialogVisible}
+            onDismiss={() => setPasswordDialogVisible(false)}
+            style={{ backgroundColor: isDark ? '#1e1e1e' : 'white' }}
+          >
+            <Dialog.Title style={{ color: isDark ? Colors.dark.text : Colors.light.text }}>Изменение пароля</Dialog.Title>
             <Dialog.Content>
               <TextInput
                 label="Текущий пароль"
                 value={passwordData.currentPassword}
-                onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
+                onChangeText={(text) => setPasswordData({...passwordData, currentPassword: text})}
                 secureTextEntry
-                style={styles.dialogInput}
                 mode="outlined"
+                style={styles.dialogInput}
               />
               <TextInput
                 label="Новый пароль"
                 value={passwordData.newPassword}
-                onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
+                onChangeText={(text) => setPasswordData({...passwordData, newPassword: text})}
                 secureTextEntry
-                style={styles.dialogInput}
                 mode="outlined"
+                style={styles.dialogInput}
               />
               <TextInput
                 label="Подтвердите новый пароль"
                 value={passwordData.confirmPassword}
-                onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
+                onChangeText={(text) => setPasswordData({...passwordData, confirmPassword: text})}
                 secureTextEntry
-                style={styles.dialogInput}
                 mode="outlined"
               />
             </Dialog.Content>
             <Dialog.Actions>
               <Button onPress={() => setPasswordDialogVisible(false)}>Отмена</Button>
-              <Button onPress={handleChangePassword}>Изменить</Button>
+              <Button onPress={handleChangePassword}>Сохранить</Button>
             </Dialog.Actions>
           </Dialog>
         </Portal>
@@ -383,19 +397,20 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+// Преобразуем стили в функциональные, чтобы они могли зависеть от темы
+const styles = {
+  container: (isDark: boolean) => ({
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    backgroundColor: 'white',
+    backgroundColor: isDark ? Colors.dark.background : Colors.light.background,
+  }),
+  header: (isDark: boolean) => ({
+    backgroundColor: isDark ? '#1e1e1e' : 'white',
     padding: 20,
     marginBottom: 16,
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
+    borderBottomColor: isDark ? '#333' : '#eee',
+  }),
   avatarContainer: {
     marginBottom: 16,
     position: 'relative',
@@ -415,25 +430,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  userName: {
+  userName: (isDark: boolean) => ({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 4,
-  },
+    color: isDark ? Colors.dark.text : Colors.light.text,
+  }),
   userRole: {
     fontSize: 16,
     color: '#2196F3',
     marginBottom: 8,
   },
-  userPosition: {
+  userPosition: (isDark: boolean) => ({
     fontSize: 14,
-    color: '#666',
+    color: isDark ? '#aaa' : '#666',
     marginBottom: 4,
-  },
-  userDepartment: {
+  }),
+  userDepartment: (isDark: boolean) => ({
     fontSize: 14,
-    color: '#666',
-  },
+    color: isDark ? '#aaa' : '#666',
+  }),
   editForm: {
     width: '100%',
     marginBottom: 16,
@@ -451,28 +467,28 @@ const styles = StyleSheet.create({
   cancelButton: {
     marginRight: 12,
   },
-  section: {
-    backgroundColor: 'white',
+  section: (isDark: boolean) => ({
+    backgroundColor: isDark ? '#1e1e1e' : 'white',
     marginBottom: 16,
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#eee',
-  },
-  sectionTitle: {
+    borderColor: isDark ? '#333' : '#eee',
+  }),
+  sectionTitle: (isDark: boolean) => ({
     fontSize: 16,
     fontWeight: 'bold',
     marginVertical: 12,
-    color: '#333',
-  },
-  option: {
+    color: isDark ? '#ccc' : '#333',
+  }),
+  option: (isDark: boolean) => ({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
-  },
+    borderBottomColor: isDark ? '#333' : '#f5f5f5',
+  }),
   optionIconContainer: {
     width: 40,
     alignItems: 'center',
@@ -481,14 +497,15 @@ const styles = StyleSheet.create({
   optionContent: {
     flex: 1,
   },
-  optionTitle: {
+  optionTitle: (isDark: boolean) => ({
     fontSize: 16,
     marginBottom: 4,
-  },
-  optionValue: {
+    color: isDark ? Colors.dark.text : Colors.light.text,
+  }),
+  optionValue: (isDark: boolean) => ({
     fontSize: 14,
-    color: '#666',
-  },
+    color: isDark ? '#aaa' : '#666',
+  }),
   logoutOption: {
     borderBottomWidth: 0,
   },
@@ -498,4 +515,4 @@ const styles = StyleSheet.create({
   dialogInput: {
     marginBottom: 12,
   },
-}); 
+}; 

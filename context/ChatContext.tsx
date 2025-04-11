@@ -4,6 +4,15 @@ import { Message, ChatRoom } from '../types';
 import { format } from 'date-fns';
 import { useAuth } from './AuthContext';
 
+// Демо-данные для сотрудников
+const DEMO_EMPLOYEES = [
+  { id: '1', name: 'Иванов Иван', position: 'Руководитель проекта', avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff' },
+  { id: '2', name: 'Петрова Елена', position: 'Ведущий дизайнер', avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff' },
+  { id: '3', name: 'Сидоров Алексей', position: 'Разработчик', avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff' },
+  { id: '4', name: 'Козлова Мария', position: 'Тестировщик', avatarUrl: 'https://ui-avatars.com/api/?name=Maria+Kozlova&background=6A1B9A&color=fff' },
+  { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
+];
+
 // Демо-данные для чатов
 const DEMO_CHAT_ROOMS: ChatRoom[] = [
   {
@@ -104,26 +113,89 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
 
   useEffect(() => {
     loadChatData();
-  }, []);
+  }, [user]);
+
+  // Функция для создания персональных чатов с каждым сотрудником
+  const createPersonalChats = (existingRooms: ChatRoom[]): ChatRoom[] => {
+    if (!user) return existingRooms;
+    
+    const updatedRooms = [...existingRooms];
+    
+    // Создаем персональные чаты со всеми сотрудниками
+    DEMO_EMPLOYEES.forEach(employee => {
+      // Не создаем чат с самим собой
+      if (employee.id === user.id) return;
+      
+      // Проверяем, существует ли уже чат с этим сотрудником
+      const existingChat = updatedRooms.find(room => 
+        !room.isGroupChat && 
+        room.participants.includes(user.id) && 
+        room.participants.includes(employee.id) && 
+        room.participants.length === 2
+      );
+      
+      // Если чата нет, создаем новый
+      if (!existingChat) {
+        const newChat: ChatRoom = {
+          id: `personal_${Date.now()}_${employee.id}`,
+          name: employee.name,
+          isGroupChat: false,
+          participants: [user.id, employee.id],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          // Добавляем приветственное сообщение в качестве lastMessage
+          lastMessage: {
+            id: `welcome_${Date.now()}_${employee.id}`,
+            senderId: employee.id,
+            receiverId: user.id,
+            text: 'Привет! Теперь мы можем общаться здесь.',
+            timestamp: new Date(),
+            isRead: false
+          }
+        };
+        
+        updatedRooms.push(newChat);
+        
+        // Добавляем приветственное сообщение в список сообщений
+        const welcomeMessage: Message = {
+          ...newChat.lastMessage,
+          chatRoomId: newChat.id
+        };
+        
+        setMessages(prev => [...prev, welcomeMessage]);
+      }
+    });
+    
+    return updatedRooms;
+  };
 
   const loadChatData = async () => {
     try {
+      if (!user) return;
+      
       // Загружаем комнаты чатов
       const storedChatRooms = await AsyncStorage.getItem('@chatRooms');
+      let initialChatRooms: ChatRoom[] = [];
+      
       if (storedChatRooms) {
         // Преобразуем строки дат обратно в объекты Date
-        const parsedChatRooms = JSON.parse(storedChatRooms, (key, value) => {
+        initialChatRooms = JSON.parse(storedChatRooms, (key, value) => {
           if (key === 'createdAt' || key === 'updatedAt' || (key === 'timestamp' && value)) {
             return new Date(value);
           }
           return value;
         });
-        setChatRooms(parsedChatRooms);
       } else {
         // Если чатов еще нет, используем демо-данные
-        setChatRooms(DEMO_CHAT_ROOMS);
-        await AsyncStorage.setItem('@chatRooms', JSON.stringify(DEMO_CHAT_ROOMS));
+        initialChatRooms = DEMO_CHAT_ROOMS;
       }
+      
+      // Создаем персональные чаты для всех сотрудников, если их еще нет
+      const updatedChatRooms = createPersonalChats(initialChatRooms);
+      
+      // Сохраняем обновленный список чатов
+      setChatRooms(updatedChatRooms);
+      await saveChatRooms(updatedChatRooms);
 
       // Загружаем сообщения
       const storedMessages = await AsyncStorage.getItem('@messages');

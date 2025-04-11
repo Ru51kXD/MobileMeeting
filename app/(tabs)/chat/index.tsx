@@ -3,11 +3,14 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Mod
 import { Searchbar, FAB, Avatar, Badge, Divider, ActivityIndicator, Button, Checkbox, TextInput, RadioButton } from 'react-native-paper';
 import { useChat } from '../../../context/ChatContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useTheme } from '../../../context/ThemeContext';
 import { ChatRoom } from '../../../types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { ThemedContainer } from '@/components/ThemedContainer';
+import { Colors } from '@/constants/Colors';
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
@@ -21,6 +24,7 @@ const DEMO_EMPLOYEES = [
 export default function ChatListScreen() {
   const { chatRooms, messages, getUnreadCount, refreshChatData, createGroupChat } = useChat();
   const { user } = useAuth();
+  const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredChatRooms, setFilteredChatRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,9 +32,29 @@ export default function ChatListScreen() {
   
   // Новые состояния для создания чата
   const [createChatModalVisible, setCreateChatModalVisible] = useState(false);
-  const [chatType, setChatType] = useState<'personal' | 'group'>('personal');
+  const [chatType, setChatType] = useState<'personal' | 'group'>('group'); // Теперь по умолчанию групповой чат
   const [selectedEmployees, setSelectedEmployees] = useState<{id: string, name: string, selected: boolean}[]>([]);
   const [groupChatName, setGroupChatName] = useState('');
+
+  // Проверяем, есть ли уже чаты со всеми сотрудниками
+  const hasChatsWithAllEmployees = () => {
+    if (!user) return false;
+    
+    // Получаем ID всех сотрудников (кроме текущего пользователя)
+    const employeeIds = DEMO_EMPLOYEES
+      .filter(emp => emp.id !== user.id)
+      .map(emp => emp.id);
+    
+    // Проверяем, есть ли для каждого сотрудника личный чат
+    return employeeIds.every(empId => {
+      return chatRooms.some(room => 
+        !room.isGroupChat && 
+        room.participants.includes(user.id) && 
+        room.participants.includes(empId) &&
+        room.participants.length === 2
+      );
+    });
+  };
 
   // Находим информацию о пользователе по ID
   const getUserInfo = (userId: string) => {
@@ -41,9 +65,24 @@ export default function ChatListScreen() {
   useEffect(() => {
     // Фильтруем чаты для текущего пользователя
     if (user) {
-      const userChatRooms = chatRooms.filter(room => 
-        room.participants.includes(user.id)
-      );
+      // Сортируем чаты: сначала с непрочитанными сообщениями, затем по времени последнего сообщения
+      const userChatRooms = chatRooms
+        .filter(room => room.participants.includes(user.id))
+        .sort((a, b) => {
+          // Проверяем наличие непрочитанных сообщений
+          const unreadCountA = getUnreadCountForRoom(a.id);
+          const unreadCountB = getUnreadCountForRoom(b.id);
+          
+          // Если у чата A есть непрочитанные, а у B нет - A выше
+          if (unreadCountA > 0 && unreadCountB === 0) return -1;
+          // Если у чата B есть непрочитанные, а у A нет - B выше
+          if (unreadCountB > 0 && unreadCountA === 0) return 1;
+          
+          // В остальных случаях сортируем по времени последнего обновления (в обратном порядке)
+          const timeA = a.lastMessage ? a.lastMessage.timestamp.getTime() : a.updatedAt.getTime();
+          const timeB = b.lastMessage ? b.lastMessage.timestamp.getTime() : b.updatedAt.getTime();
+          return timeB - timeA;
+        });
       
       // Применяем поиск по названию чата
       if (searchQuery.trim()) {
@@ -149,65 +188,38 @@ export default function ChatListScreen() {
     ).length;
   };
 
-  const renderChatRoomItem = ({ item }: { item: ChatRoom }) => {
-    const lastMessage = getLastMessagePreview(item);
-    const unreadCount = getUnreadCountForRoom(item.id);
-    
-    return (
-      <TouchableOpacity 
-        style={styles.chatRoomItem}
-        onPress={() => handleChatRoomPress(item.id)}
-      >
-        <View style={styles.avatarContainer}>
-          {item.isGroupChat ? (
-            <Avatar.Icon
-              size={56}
-              icon="account-group"
-              style={styles.groupAvatar}
-            />
-          ) : (
-            <Avatar.Image
-              size={56}
-              source={{ uri: getUserInfo(item.participants.find(p => p !== user?.id) || '').avatarUrl }}
-            />
-          )}
-          
-          {unreadCount > 0 && (
-            <Badge style={styles.unreadBadge}>{unreadCount}</Badge>
-          )}
-        </View>
-        
-        <View style={styles.chatInfo}>
-          <View style={styles.chatHeader}>
-            <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.timestamp}>{formatMessageTime(lastMessage.timestamp)}</Text>
-          </View>
-          
-          <Text 
-            style={[styles.lastMessage, unreadCount > 0 && styles.unreadMessage]} 
-            numberOfLines={1}
-          >
-            {lastMessage.sender}{lastMessage.text}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   // Инициализация списка сотрудников при открытии модального окна
   const openCreateChatModal = () => {
-    // Инициализируем список сотрудников
+    // Получаем ID сотрудников, с которыми у нас уже есть чаты
+    const existingChatEmployeeIds = new Set<string>();
+    
+    if (user) {
+      chatRooms
+        .filter(room => !room.isGroupChat && room.participants.includes(user.id) && room.participants.length === 2)
+        .forEach(room => {
+          const otherParticipantId = room.participants.find(id => id !== user.id);
+          if (otherParticipantId) {
+            existingChatEmployeeIds.add(otherParticipantId);
+          }
+        });
+    }
+    
+    // Инициализируем список сотрудников, исключая тех, с кем уже есть чаты
     const initialSelectedEmployees = DEMO_EMPLOYEES
-      .filter(emp => emp.id !== user?.id) // Исключаем текущего пользователя
+      .filter(emp => emp.id !== user?.id && !existingChatEmployeeIds.has(emp.id))
       .map(emp => ({
         id: emp.id,
         name: emp.name,
         selected: false
       }));
     
+    // Если нет новых сотрудников для личных чатов, сразу переключаемся на групповой чат
+    if (initialSelectedEmployees.length === 0) {
+      setChatType('group');
+    }
+    
     setSelectedEmployees(initialSelectedEmployees);
     setGroupChatName('');
-    setChatType('personal');
     setCreateChatModalVisible(true);
   };
 
@@ -247,20 +259,24 @@ export default function ChatListScreen() {
         if (chatType === 'personal') {
           // Для личного чата ищем существующий чат с этим пользователем
           const selectedUserId = selected[0].id;
-          const existingChat = chatRooms.find(room => 
+          
+          // Чата нет, создаем новый
+          alert(`Чат с ${selected[0].name} будет создан при первом сообщении`);
+          
+          // Перезагружаем данные, чтобы создать новый чат
+          await refreshChatData();
+          
+          // Ищем новый чат
+          const newChat = chatRooms.find(room => 
             !room.isGroupChat && 
             room.participants.includes(user?.id || '') &&
             room.participants.includes(selectedUserId) &&
             room.participants.length === 2
           );
           
-          if (existingChat) {
-            // Если чат существует, переходим к нему
-            router.push(`/(tabs)/chat/${existingChat.id}`);
-          } else {
-            // Если чата нет, создаем новый (обычно это делается через ChatContext)
-            // Но для простоты сейчас просто закрываем модальное окно
-            alert(`Чат с ${selected[0].name} будет создан при первом сообщении`);
+          if (newChat) {
+            // Переход в новый чат
+            router.push(`/(tabs)/chat/${newChat.id}`);
           }
         } else {
           // Для группового чата используем createGroupChat
@@ -293,157 +309,188 @@ export default function ChatListScreen() {
     }
   };
 
-  if (loading) {
+  // Динамические стили для тёмной темы
+  const dynamicStyles = {
+    header: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      borderBottomColor: isDark ? '#333' : '#e0e0e0',
+    },
+    headerTitle: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    searchBar: {
+      backgroundColor: isDark ? '#2c2c2c' : '#f2f2f2',
+    },
+    chatRoomItem: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      borderBottomColor: isDark ? '#333' : '#f0f0f0',
+    },
+    chatName: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    lastMessage: {
+      color: isDark ? '#888' : '#666',
+    },
+    unreadMessage: {
+      color: isDark ? Colors.dark.text : '#000',
+      fontWeight: 'bold',
+    },
+    timestamp: {
+      color: isDark ? '#777' : '#999',
+    },
+    modalContent: {
+      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+    },
+    modalTitle: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    modalText: {
+      color: isDark ? '#aaa' : '#666',
+    },
+    input: {
+      backgroundColor: isDark ? '#2c2c2c' : '#f5f5f5',
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    employeeItem: {
+      borderBottomColor: isDark ? '#333' : '#f0f0f0',
+    },
+    employeeName: {
+      color: isDark ? Colors.dark.text : '#333',
+    },
+    employeePosition: {
+      color: isDark ? '#888' : '#666',
+    },
+  };
+
+  // Рендеринг модального окна создания чата
+  const renderCreateChatModal = () => {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Сообщения</Text>
-        <Searchbar
-          placeholder="Поиск чатов..."
-          onChangeText={handleSearchChange}
-          value={searchQuery}
-          style={styles.searchBar}
-          iconColor="#666"
-        />
-      </View>
-      
-      <FlatList
-        data={filteredChatRooms}
-        renderItem={renderChatRoomItem}
-        keyExtractor={item => item.id}
-        ItemSeparatorComponent={() => <Divider style={styles.divider} />}
-        contentContainerStyle={styles.chatList}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#2196F3']}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="chat-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>
-              {searchQuery ? 
-                'Чаты не найдены. Попробуйте изменить параметры поиска.' : 
-                'У вас пока нет активных чатов.'}
-            </Text>
-          </View>
-        }
-      />
-
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={openCreateChatModal}
-        color="#ffffff"
-      />
-      
-      {/* Модальное окно создания чата */}
       <Modal
         visible={createChatModalVisible}
-        transparent={true}
         animationType="slide"
+        transparent={true}
         onRequestClose={closeCreateChatModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Создать новый чат</Text>
-              <TouchableOpacity onPress={closeCreateChatModal}>
-                <MaterialCommunityIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
+        <View style={[styles.modalContainer, { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}>
+            <Text style={[styles.modalTitle, { color: isDark ? '#ffffff' : '#333333' }]}>
+              Создать {chatType === 'personal' ? 'личный чат' : 'групповой чат'}
+            </Text>
             
-            <Divider />
-            
-            <View style={styles.chatTypeSelector}>
-              <Text style={styles.sectionTitle}>Тип чата:</Text>
-              <RadioButton.Group 
-                onValueChange={(value) => setChatType(value as 'personal' | 'group')} 
-                value={chatType}
-              >
-                <View style={styles.radioOption}>
-                  <RadioButton value="personal" />
-                  <Text>Личный чат</Text>
-                </View>
-                <View style={styles.radioOption}>
-                  <RadioButton value="group" />
-                  <Text>Групповой чат</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-            
-            {chatType === 'group' && (
-              <View style={styles.groupNameContainer}>
-                <Text style={styles.sectionTitle}>Название группы:</Text>
-                <TextInput
-                  mode="outlined"
-                  placeholder="Введите название группы"
-                  value={groupChatName}
-                  onChangeText={setGroupChatName}
-                  style={styles.groupNameInput}
-                />
+            {/* Переключатель типа чата (только для демонстрации, так как с каждым уже есть чат) */}
+            {selectedEmployees.length > 0 && (
+              <View style={styles.chatTypeSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.chatTypeButton,
+                    chatType === 'personal' && styles.chatTypeButtonActive,
+                    { borderColor: isDark ? '#444' : '#ddd' }
+                  ]}
+                  onPress={() => setChatType('personal')}
+                >
+                  <Text style={[
+                    styles.chatTypeButtonText,
+                    chatType === 'personal' && styles.chatTypeButtonTextActive,
+                    { color: isDark ? (chatType === 'personal' ? '#2196F3' : '#aaa') : (chatType === 'personal' ? '#2196F3' : '#666') }
+                  ]}>
+                    Личный чат
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.chatTypeButton,
+                    chatType === 'group' && styles.chatTypeButtonActive,
+                    { borderColor: isDark ? '#444' : '#ddd' }
+                  ]}
+                  onPress={() => setChatType('group')}
+                >
+                  <Text style={[
+                    styles.chatTypeButtonText,
+                    chatType === 'group' && styles.chatTypeButtonTextActive,
+                    { color: isDark ? (chatType === 'group' ? '#2196F3' : '#aaa') : (chatType === 'group' ? '#2196F3' : '#666') }
+                  ]}>
+                    Групповой чат
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
             
-            <Text style={styles.sectionTitle}>
-              {chatType === 'personal' ? 'Выберите пользователя:' : 'Выберите участников:'}
-            </Text>
+            {/* Название группового чата */}
+            {chatType === 'group' && (
+              <TextInput
+                style={[styles.groupNameInput, { 
+                  backgroundColor: isDark ? '#333' : '#f5f5f5',
+                  color: isDark ? '#fff' : '#333',
+                  borderColor: isDark ? '#444' : '#ddd'
+                }]}
+                placeholder="Название группового чата"
+                placeholderTextColor={isDark ? '#aaa' : '#999'}
+                value={groupChatName}
+                onChangeText={setGroupChatName}
+              />
+            )}
             
-            <FlatList
-              data={selectedEmployees}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.employeeItem}
-                  onPress={() => toggleEmployeeSelection(item.id)}
-                >
-                  <View style={styles.employeeInfo}>
-                    <Avatar.Image 
-                      size={40} 
-                      source={{ 
-                        uri: DEMO_EMPLOYEES.find(emp => emp.id === item.id)?.avatarUrl || 
-                             'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff'
-                      }} 
-                    />
-                    <Text style={styles.employeeName}>{item.name}</Text>
-                  </View>
-                  {chatType === 'personal' ? (
-                    <RadioButton
-                      value={item.id}
-                      status={item.selected ? 'checked' : 'unchecked'}
-                      onPress={() => toggleEmployeeSelection(item.id)}
-                    />
-                  ) : (
-                    <Checkbox
-                      status={item.selected ? 'checked' : 'unchecked'}
-                      onPress={() => toggleEmployeeSelection(item.id)}
-                    />
-                  )}
-                </TouchableOpacity>
-              )}
-              keyExtractor={(item) => item.id}
-              style={styles.employeeList}
-            />
+            {/* Список сотрудников */}
+            {selectedEmployees.length > 0 ? (
+              <FlatList
+                data={selectedEmployees}
+                keyExtractor={item => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.employeeItem, { borderBottomColor: isDark ? '#444' : '#eee' }]}
+                    onPress={() => toggleEmployeeSelection(item.id)}
+                  >
+                    <View style={styles.employeeInfo}>
+                      <Avatar.Image
+                        size={40}
+                        source={{ uri: getUserInfo(item.id).avatarUrl }}
+                      />
+                      <Text style={[styles.employeeName, { color: isDark ? '#fff' : '#333' }]}>
+                        {item.name}
+                      </Text>
+                    </View>
+                    {chatType === 'personal' ? (
+                      <RadioButton
+                        value={item.id}
+                        status={item.selected ? 'checked' : 'unchecked'}
+                        onPress={() => toggleEmployeeSelection(item.id)}
+                        color="#2196F3"
+                      />
+                    ) : (
+                      <Checkbox
+                        status={item.selected ? 'checked' : 'unchecked'}
+                        onPress={() => toggleEmployeeSelection(item.id)}
+                        color="#2196F3"
+                      />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <View style={styles.noEmployeesContainer}>
+                <Text style={[styles.noEmployeesText, { color: isDark ? '#aaa' : '#666' }]}>
+                  У вас уже есть чаты со всеми сотрудниками.
+                  {'\n'}Вы можете создать только групповой чат.
+                </Text>
+              </View>
+            )}
             
-            <Divider />
-            
-            <View style={styles.modalFooter}>
-              <Button onPress={closeCreateChatModal}>Отмена</Button>
-              <Button 
-                mode="contained" 
+            {/* Кнопки */}
+            <View style={styles.modalButtons}>
+              <Button
+                mode="outlined"
+                onPress={closeCreateChatModal}
+                style={[styles.modalButton, { borderColor: isDark ? '#555' : '#ddd' }]}
+                textColor={isDark ? '#fff' : '#666'}
+              >
+                Отмена
+              </Button>
+              <Button
+                mode="contained"
                 onPress={handleCreateChat}
-                disabled={
-                  (chatType === 'personal' && !selectedEmployees.some(emp => emp.selected)) ||
-                  (chatType === 'group' && (!groupChatName.trim() || !selectedEmployees.some(emp => emp.selected)))
-                }
+                style={[styles.modalButton, { backgroundColor: '#2196F3' }]}
+                disabled={(chatType === 'personal' && selectedEmployees.filter(e => e.selected).length === 0) ||
+                       (chatType === 'group' && (selectedEmployees.filter(e => e.selected).length === 0 || !groupChatName.trim()))}
               >
                 Создать
               </Button>
@@ -451,7 +498,139 @@ export default function ChatListScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    );
+  };
+
+  // Рендеринг компонента
+  if (loading) {
+    return (
+      <ThemedContainer style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2196F3" />
+      </ThemedContainer>
+    );
+  }
+
+  return (
+    <ThemedContainer style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Чаты</Text>
+      </View>
+      
+      <Searchbar
+        placeholder="Поиск чатов"
+        onChangeText={handleSearchChange}
+        value={searchQuery}
+        style={[styles.searchBar, { backgroundColor: isDark ? '#333' : '#f0f0f0' }]}
+        inputStyle={{ color: isDark ? '#fff' : '#333' }}
+        iconColor={isDark ? '#aaa' : '#666'}
+        placeholderTextColor={isDark ? '#aaa' : '#999'}
+      />
+      
+      {filteredChatRooms.length > 0 ? (
+        <FlatList
+          data={filteredChatRooms}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
+            const lastMessage = getLastMessagePreview(item);
+            const unreadCount = getUnreadCountForRoom(item.id);
+            
+            // Для личных чатов используем имя другого участника
+            let chatName = item.name;
+            if (!item.isGroupChat && user) {
+              const otherParticipantId = item.participants.find(id => id !== user.id);
+              if (otherParticipantId) {
+                const employeeInfo = getUserInfo(otherParticipantId);
+                chatName = employeeInfo.name;
+              }
+            }
+            
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.chatItem,
+                  { backgroundColor: isDark ? (unreadCount > 0 ? '#263238' : '#1e1e1e') : (unreadCount > 0 ? '#f5f8fa' : '#ffffff') }
+                ]}
+                onPress={() => handleChatRoomPress(item.id)}
+              >
+                <View style={styles.chatItemLeft}>
+                  {item.isGroupChat ? (
+                    <Avatar.Text
+                      size={50}
+                      label={item.name.substring(0, 2).toUpperCase()}
+                      backgroundColor={isDark ? '#3949ab' : '#5c6bc0'}
+                    />
+                  ) : (
+                    <Avatar.Image
+                      size={50}
+                      source={{ uri: getUserInfo(item.participants.find(id => id !== user?.id) || '').avatarUrl }}
+                    />
+                  )}
+                </View>
+                
+                <View style={styles.chatItemMiddle}>
+                  <View style={styles.chatItemHeader}>
+                    <Text style={[styles.chatName, { color: isDark ? '#fff' : '#333' }]} numberOfLines={1}>
+                      {chatName}
+                    </Text>
+                    <Text style={[styles.chatTime, { color: isDark ? '#aaa' : '#999' }]}>
+                      {formatMessageTime(lastMessage.timestamp)}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.chatItemPreview}>
+                    <Text style={[
+                      styles.messagePreview,
+                      { color: isDark ? (unreadCount > 0 ? '#e0e0e0' : '#bbb') : (unreadCount > 0 ? '#333' : '#666') },
+                      unreadCount > 0 && { fontWeight: 'bold' }
+                    ]} numberOfLines={1}>
+                      {lastMessage.sender}{lastMessage.text}
+                    </Text>
+                    
+                    {unreadCount > 0 && (
+                      <Badge style={styles.unreadBadge}>{unreadCount}</Badge>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#2196F3']}
+              tintColor={isDark ? '#fff' : '#2196F3'}
+            />
+          }
+          ItemSeparatorComponent={() => <Divider style={{ backgroundColor: isDark ? '#333' : '#f0f0f0' }} />}
+          contentContainerStyle={{ flexGrow: 1 }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="chat-remove" size={64} color={isDark ? '#555' : '#ccc'} />
+              <Text style={[styles.emptyText, { color: isDark ? '#aaa' : '#666' }]}>
+                {searchQuery ? 'Чаты не найдены' : 'У вас пока нет чатов'}
+              </Text>
+            </View>
+          }
+        />
+      ) : (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="chat-remove" size={64} color={isDark ? '#555' : '#ccc'} />
+          <Text style={[styles.emptyText, { color: isDark ? '#aaa' : '#666' }]}>
+            {searchQuery ? 'Чаты не найдены' : 'У вас пока нет чатов'}
+          </Text>
+        </View>
+      )}
+      
+      <FAB
+        style={styles.fab}
+        icon="plus"
+        label="Новый чат"
+        onPress={openCreateChatModal}
+      />
+      
+      {renderCreateChatModal()}
+    </ThemedContainer>
   );
 }
 
@@ -621,5 +800,85 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  footerButton: {
+    flex: 1,
+  },
+  employeesList: {
+    padding: 16,
+  },
+  employeeDetails: {
+    flexDirection: 'column',
+  },
+  chatItem: {
+    flexDirection: 'row',
+    padding: 16,
+    alignItems: 'center',
+  },
+  chatItemLeft: {
+    marginRight: 16,
+  },
+  chatItemMiddle: {
+    flex: 1,
+  },
+  chatItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 4,
+  },
+  chatTime: {
+    fontSize: 12,
+    color: '#666',
+  },
+  chatItemPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messagePreview: {
+    flex: 1,
+  },
+  chatTypeButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+  },
+  chatTypeButtonActive: {
+    borderColor: '#2196F3',
+  },
+  chatTypeButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  chatTypeButtonTextActive: {
+    color: '#2196F3',
+  },
+  noEmployeesContainer: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  noEmployeesText: {
+    textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
   },
 }); 

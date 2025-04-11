@@ -5,13 +5,16 @@ import { useChat } from '../../context/ChatContext';
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, View, Text } from 'react-native';
-import { UserRole } from '../../types';
 import { Badge } from 'react-native-paper';
+import { UserRole } from '../../types/index';
+import { useTheme } from '../../context/ThemeContext';
+import { Colors } from '@/constants/Colors';
 
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
   const { getUnreadCount } = useChat();
   const router = useRouter();
+  const { isDark } = useTheme();
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -22,7 +25,12 @@ export default function TabLayout() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: isDark ? '#121212' : '#ffffff'
+      }}>
         <ActivityIndicator size="large" color="#2196F3" />
       </View>
     );
@@ -35,17 +43,43 @@ export default function TabLayout() {
   // Количество непрочитанных сообщений
   const unreadCount = getUnreadCount();
 
-  // Проверим наличие UserRole и создадим константы для ролей
-  const ADMIN_ROLE = 'ADMIN';
-  const MANAGER_ROLE = 'MANAGER';
+  // Создаем обработчики стилей, чтобы избежать ошибок с анимированными значениями
+  const getTabBarStyle = () => {
+    return { 
+      paddingBottom: 5, 
+      height: 60, 
+      backgroundColor: isDark ? '#121212' : '#ffffff',
+      borderTopColor: isDark ? '#333' : '#e0e0e0',
+    };
+  };
+
+  const getTabBarBackgroundStyle = () => {
+    return { 
+      flex: 1, 
+      backgroundColor: isDark ? '#121212' : '#ffffff'
+    };
+  };
+
+  const getHeaderStyle = () => {
+    return { 
+      backgroundColor: isDark ? '#121212' : '#ffffff',
+      borderBottomColor: isDark ? '#333' : '#e0e0e0',
+      borderBottomWidth: 1 
+    };
+  };
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: '#666',
+        tabBarInactiveTintColor: isDark ? '#999' : '#666',
         tabBarLabelStyle: { fontSize: 12 },
-        tabBarStyle: { paddingBottom: 5, height: 60 },
+        tabBarStyle: getTabBarStyle(),
+        tabBarBackground: () => (
+          <View style={getTabBarBackgroundStyle()} />
+        ),
+        headerStyle: getHeaderStyle(),
+        headerTintColor: isDark ? '#ffffff' : '#333333',
       }}
     >
       <Tabs.Screen
@@ -116,7 +150,7 @@ export default function TabLayout() {
         }}
       />
       
-      {(user?.role === ADMIN_ROLE || user?.role === MANAGER_ROLE) && (
+      {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
         <Tabs.Screen
           name="employees"
           options={{

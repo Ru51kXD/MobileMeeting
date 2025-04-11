@@ -1,24 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
 import { Avatar, Button, FAB, ActivityIndicator, Dialog, Portal, Chip, Searchbar, SegmentedButtons } from 'react-native-paper';
-import { User } from '../../types';
+import { User, UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-// Определим UserRole прямо здесь, чтобы избежать проблем с импортом
-const UserRole = {
-  ADMIN: 'ADMIN',
-  MANAGER: 'MANAGER',
-  EMPLOYEE: 'EMPLOYEE'
-};
-
-// Обновим тип User
-interface EmployeeUser extends User {
-  role: string;
-}
+import { Colors } from '@/constants/Colors';
 
 // Временный список сотрудников
-const DEMO_USERS: EmployeeUser[] = [
+const DEMO_USERS: User[] = [
   {
     id: '1',
     email: 'admin@company.com',
@@ -75,12 +65,13 @@ const DEMO_USERS: EmployeeUser[] = [
 
 export default function EmployeesScreen() {
   const { user } = useAuth();
-  const [employees, setEmployees] = useState<EmployeeUser[]>([]);
-  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeUser[]>([]);
+  const { isDark } = useTheme();
+  const [employees, setEmployees] = useState<User[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeUser | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
   const [detailDialogVisible, setDetailDialogVisible] = useState(false);
   const [addDialogVisible, setAddDialogVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -138,7 +129,7 @@ export default function EmployeesScreen() {
     setFilteredEmployees(filtered);
   };
 
-  const handleEmployeePress = (employee: EmployeeUser) => {
+  const handleEmployeePress = (employee: User) => {
     setSelectedEmployee(employee);
     setDetailDialogVisible(true);
   };
@@ -165,7 +156,7 @@ export default function EmployeesScreen() {
     
     // Добавляем нового сотрудника
     const newId = (Math.max(...employees.map(e => parseInt(e.id))) + 1).toString();
-    const newUser: EmployeeUser = {
+    const newUser: User = {
       id: newId,
       ...newEmployee,
       avatarUrl: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 50)}`,
@@ -230,64 +221,29 @@ export default function EmployeesScreen() {
     }
   };
 
-  const renderEmployeeItem = ({ item }: { item: EmployeeUser }) => {
-    return (
-      <TouchableOpacity
-        style={styles.employeeItem}
-        onPress={() => handleEmployeePress(item)}
-      >
-        <View style={styles.employeeHeader}>
-          <Avatar.Image
-            source={{ uri: item.avatarUrl }}
-            size={50}
-          />
-          <View style={styles.employeeInfo}>
-            <Text style={styles.employeeName}>{item.name}</Text>
-            <Text style={styles.employeeEmail}>{item.email}</Text>
-            {item.position && (
-              <Text style={styles.employeePosition}>{item.position}</Text>
-            )}
-          </View>
-        </View>
-        
-        <View style={styles.employeeFooter}>
-          <Chip 
-            style={[styles.roleChip, { backgroundColor: getRoleColor(item.role) }]}
-            textStyle={{ color: 'white' }}
-          >
-            {getRoleText(item.role)}
-          </Chip>
-          
-          {item.department && (
-            <Chip style={styles.departmentChip}>
-              {item.department}
-            </Chip>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: isDark ? '#121212' : '#f5f5f5' }]}>
         <ActivityIndicator size="large" color="#2196F3" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#121212' : '#f5f5f5' }]}>
+      <View style={[styles.header, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}>
         <Searchbar
           placeholder="Поиск сотрудников..."
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={styles.searchBar}
+          inputStyle={{ color: isDark ? Colors.dark.text : Colors.light.text }}
+          iconColor={isDark ? '#999' : '#666'}
+          placeholderTextColor={isDark ? '#999' : '#666'}
         />
       </View>
 
-      <View style={styles.filterContainer}>
+      <View style={[styles.filterContainer, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}>
         <SegmentedButtons
           value={selectedFilter}
           onValueChange={setSelectedFilter}
@@ -303,7 +259,41 @@ export default function EmployeesScreen() {
       
       <FlatList
         data={filteredEmployees}
-        renderItem={renderEmployeeItem}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[styles.employeeItem, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}
+            onPress={() => handleEmployeePress(item)}
+          >
+            <View style={styles.employeeHeader}>
+              <Avatar.Image
+                source={{ uri: item.avatarUrl }}
+                size={50}
+              />
+              <View style={styles.employeeInfo}>
+                <Text style={[styles.employeeName, { color: isDark ? Colors.dark.text : '#333' }]}>{item.name}</Text>
+                <Text style={[styles.employeeEmail, { color: isDark ? '#aaa' : '#666' }]}>{item.email}</Text>
+                {item.position && (
+                  <Text style={[styles.employeePosition, { color: isDark ? '#aaa' : '#666' }]}>{item.position}</Text>
+                )}
+              </View>
+            </View>
+            
+            <View style={styles.employeeFooter}>
+              <Chip 
+                style={[styles.roleChip, { backgroundColor: getRoleColor(item.role) }]}
+                textStyle={{ color: 'white' }}
+              >
+                {getRoleText(item.role)}
+              </Chip>
+              
+              {item.department && (
+                <Chip style={[styles.departmentChip, { backgroundColor: isDark ? '#333' : '#e0e0e0' }]}>
+                  {item.department}
+                </Chip>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.employeesList}
         refreshControl={
@@ -315,22 +305,22 @@ export default function EmployeesScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="account-search" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>Сотрудники не найдены</Text>
+            <MaterialCommunityIcons name="account-search" size={64} color={isDark ? '#555' : '#ccc'} />
+            <Text style={[styles.emptyText, { color: isDark ? '#888' : '#666' }]}>Сотрудники не найдены</Text>
           </View>
         }
       />
       
-      {/* Диалог с детальной информацией о сотруднике */}
+      {/* Диалоги и FAB */}
       <Portal>
         <Dialog
           visible={detailDialogVisible}
           onDismiss={() => setDetailDialogVisible(false)}
-          style={styles.dialog}
+          style={[styles.dialog, { backgroundColor: isDark ? '#1e1e1e' : 'white' }]}
         >
           {selectedEmployee && (
             <>
-              <Dialog.Title>Информация о сотруднике</Dialog.Title>
+              <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>Информация о сотруднике</Dialog.Title>
               <Dialog.Content>
                 <View style={styles.dialogAvatarContainer}>
                   <Avatar.Image
@@ -340,17 +330,17 @@ export default function EmployeesScreen() {
                 </View>
                 
                 <View style={styles.dialogSection}>
-                  <Text style={styles.dialogSectionTitle}>Имя</Text>
-                  <Text style={styles.dialogText}>{selectedEmployee.name}</Text>
+                  <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Имя</Text>
+                  <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.name}</Text>
                 </View>
                 
                 <View style={styles.dialogSection}>
-                  <Text style={styles.dialogSectionTitle}>Email</Text>
-                  <Text style={styles.dialogText}>{selectedEmployee.email}</Text>
+                  <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Email</Text>
+                  <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.email}</Text>
                 </View>
                 
                 <View style={styles.dialogSection}>
-                  <Text style={styles.dialogSectionTitle}>Роль</Text>
+                  <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Роль</Text>
                   <Chip 
                     style={[styles.dialogChip, { backgroundColor: getRoleColor(selectedEmployee.role) }]}
                     textStyle={{ color: 'white' }}
@@ -361,21 +351,20 @@ export default function EmployeesScreen() {
                 
                 {selectedEmployee.department && (
                   <View style={styles.dialogSection}>
-                    <Text style={styles.dialogSectionTitle}>Отдел</Text>
-                    <Text style={styles.dialogText}>{selectedEmployee.department}</Text>
+                    <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Отдел</Text>
+                    <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.department}</Text>
                   </View>
                 )}
                 
                 {selectedEmployee.position && (
                   <View style={styles.dialogSection}>
-                    <Text style={styles.dialogSectionTitle}>Должность</Text>
-                    <Text style={styles.dialogText}>{selectedEmployee.position}</Text>
+                    <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Должность</Text>
+                    <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.position}</Text>
                   </View>
                 )}
               </Dialog.Content>
               <Dialog.Actions>
                 <Button onPress={() => setDetailDialogVisible(false)}>Закрыть</Button>
-                {/* Кнопка удаления только для администраторов */}
                 {user?.role === UserRole.ADMIN && (
                   <Button 
                     textColor="red" 
@@ -392,15 +381,15 @@ export default function EmployeesScreen() {
         </Dialog>
       </Portal>
       
-      {/* Диалог подтверждения удаления */}
       <Portal>
         <Dialog
           visible={deleteConfirmVisible}
           onDismiss={() => setDeleteConfirmVisible(false)}
+          style={{ backgroundColor: isDark ? '#1e1e1e' : 'white' }}
         >
-          <Dialog.Title>Подтверждение удаления</Dialog.Title>
+          <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>Подтверждение удаления</Dialog.Title>
           <Dialog.Content>
-            <Text>
+            <Text style={{ color: isDark ? Colors.dark.text : '#333' }}>
               Вы уверены, что хотите удалить сотрудника {selectedEmployee?.name}?
               Это действие нельзя отменить.
             </Text>
@@ -412,14 +401,13 @@ export default function EmployeesScreen() {
         </Dialog>
       </Portal>
       
-      {/* Диалог добавления сотрудника */}
       <Portal>
         <Dialog
           visible={addDialogVisible}
           onDismiss={() => setAddDialogVisible(false)}
-          style={styles.dialog}
+          style={[styles.dialog, { backgroundColor: isDark ? '#1e1e1e' : 'white' }]}
         >
-          <Dialog.Title>Добавить сотрудника</Dialog.Title>
+          <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>Добавить сотрудника</Dialog.Title>
           <Dialog.Content>
             <TextInput
               label="Имя и фамилия *"
@@ -455,7 +443,7 @@ export default function EmployeesScreen() {
               mode="outlined"
             />
             
-            <Text style={styles.roleLabel}>Роль:</Text>
+            <Text style={[styles.roleLabel, { color: isDark ? '#aaa' : '#666' }]}>Роль:</Text>
             <SegmentedButtons
               value={newEmployee.role}
               onValueChange={(value) => setNewEmployee({ ...newEmployee, role: value as string })}
@@ -485,7 +473,7 @@ export default function EmployeesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    padding: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -495,7 +483,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
     elevation: 2,
   },
   searchBar: {
@@ -504,8 +491,6 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
-    marginTop: 1,
     elevation: 1,
   },
   segmentedButtons: {
@@ -515,7 +500,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   employeeItem: {
-    backgroundColor: '#ffffff',
     borderRadius: 8,
     padding: 16,
     marginBottom: 8,

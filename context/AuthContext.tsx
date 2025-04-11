@@ -1,18 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User } from '../types';
-
-// Константы для ролей пользователей
-const ROLE_ADMIN = 'ADMIN';
-const ROLE_MANAGER = 'MANAGER';
-const ROLE_EMPLOYEE = 'EMPLOYEE';
-
-// Определим объект UserRole для использования в коде
-const UserRole = {
-  ADMIN: ROLE_ADMIN,
-  MANAGER: ROLE_MANAGER,
-  EMPLOYEE: ROLE_EMPLOYEE
-};
+import { User, UserRole } from '../types/index';
 
 interface AuthContextType {
   user: User | null;

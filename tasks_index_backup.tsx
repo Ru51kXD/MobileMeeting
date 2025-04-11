@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions, ScrollView } from 'react-native';
 import { Searchbar, FAB, Chip, Menu, Divider, Button, ActivityIndicator, Dialog, Portal, Avatar } from 'react-native-paper';
-import { useAuth } from '../../../context/AuthContext';
-import { useTask } from '../../../context/TaskContext';
-import { useTheme } from '../../../context/ThemeContext';
+import { useAuth } from './context/AuthContext';
+import { useTask } from './context/TaskContext';
+import { useTheme } from './context/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, isSameDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ThemedContainer } from '@/components/ThemedContainer';
 import { Colors } from '@/constants/Colors';
-import { UserRole, TaskPriority, TaskStatus, Task } from '../../../types/index';
+import { User, Task, UserRole, TaskStatus, TaskPriority } from './types/index';
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
