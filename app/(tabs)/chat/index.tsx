@@ -11,18 +11,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ThemedContainer } from '@/components/ThemedContainer';
 import { Colors } from '@/constants/Colors';
-
-// Временные данные сотрудников для демо
-const DEMO_EMPLOYEES = [
-  { id: '1', name: 'Иванов Иван', position: 'Руководитель проекта', avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff' },
-  { id: '2', name: 'Петрова Елена', position: 'Ведущий дизайнер', avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff' },
-  { id: '3', name: 'Сидоров Алексей', position: 'Разработчик', avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff' },
-  { id: '4', name: 'Козлова Мария', position: 'Тестировщик', avatarUrl: 'https://ui-avatars.com/api/?name=Maria+Kozlova&background=6A1B9A&color=fff' },
-  { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
-];
+import { getEmployeeInfo, DEMO_EMPLOYEES } from '../../../context/ChatContext';
 
 export default function ChatListScreen() {
-  const { chatRooms, messages, getUnreadCount, refreshChatData, createGroupChat } = useChat();
+  const { chatRooms, messages, getUnreadCount, refreshChatData, resetAndRefreshChatData, createGroupChat } = useChat();
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,11 +48,12 @@ export default function ChatListScreen() {
     });
   };
 
-  // Находим информацию о пользователе по ID
-  const getUserInfo = (userId: string) => {
-    return DEMO_EMPLOYEES.find(emp => emp.id === userId) || 
-      { id: userId, name: 'Неизвестный пользователь', position: '', avatarUrl: 'https://ui-avatars.com/api/?name=Unknown' };
-  };
+  useEffect(() => {
+    // Загружаем данные при первом входе
+    refreshChatData().then(() => {
+      setLoading(false);
+    });
+  }, []);
 
   useEffect(() => {
     // Фильтруем чаты для текущего пользователя
@@ -96,13 +89,21 @@ export default function ChatListScreen() {
       }
     }
     
-    setLoading(false);
     setRefreshing(false);
   }, [chatRooms, user, searchQuery]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshChatData();
+  };
+
+  const handleResetChats = async () => {
+    setLoading(true);
+    try {
+      await resetAndRefreshChatData();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSearchChange = (query: string) => {
@@ -443,11 +444,16 @@ export default function ChatListScreen() {
                     <View style={styles.employeeInfo}>
                       <Avatar.Image
                         size={40}
-                        source={{ uri: getUserInfo(item.id).avatarUrl }}
+                        source={{ uri: getEmployeeInfo(item.id).avatarUrl }}
                       />
-                      <Text style={[styles.employeeName, { color: isDark ? '#fff' : '#333' }]}>
-                        {item.name}
-                      </Text>
+                      <View style={styles.employeeDetails}>
+                        <Text style={[styles.employeeName, { color: isDark ? '#fff' : '#333' }]}>
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.employeePosition, { color: isDark ? '#aaa' : '#666' }]}>
+                          {getEmployeeInfo(item.id).position}
+                        </Text>
+                      </View>
                     </View>
                     {chatType === 'personal' ? (
                       <RadioButton
@@ -513,7 +519,15 @@ export default function ChatListScreen() {
   return (
     <ThemedContainer style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Чаты</Text>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.headerTitle}>Чаты</Text>
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={handleResetChats}
+          >
+            <Text style={styles.resetButtonText}>Сбросить чаты</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       
       <Searchbar
@@ -536,11 +550,16 @@ export default function ChatListScreen() {
             
             // Для личных чатов используем имя другого участника
             let chatName = item.name;
+            let chatPosition = '';
+            let avatarUrl = '';
+            
             if (!item.isGroupChat && user) {
               const otherParticipantId = item.participants.find(id => id !== user.id);
               if (otherParticipantId) {
-                const employeeInfo = getUserInfo(otherParticipantId);
+                const employeeInfo = getEmployeeInfo(otherParticipantId);
                 chatName = employeeInfo.name;
+                chatPosition = employeeInfo.position;
+                avatarUrl = employeeInfo.avatarUrl;
               }
             }
             
@@ -562,16 +581,23 @@ export default function ChatListScreen() {
                   ) : (
                     <Avatar.Image
                       size={50}
-                      source={{ uri: getUserInfo(item.participants.find(id => id !== user?.id) || '').avatarUrl }}
+                      source={{ uri: avatarUrl }}
                     />
                   )}
                 </View>
                 
                 <View style={styles.chatItemMiddle}>
                   <View style={styles.chatItemHeader}>
-                    <Text style={[styles.chatName, { color: isDark ? '#fff' : '#333' }]} numberOfLines={1}>
-                      {chatName}
-                    </Text>
+                    <View style={styles.chatTitleContainer}>
+                      <Text style={[styles.chatName, { color: isDark ? '#fff' : '#333' }]} numberOfLines={1}>
+                        {chatName}
+                      </Text>
+                      {!item.isGroupChat && chatPosition && (
+                        <Text style={[styles.chatPosition, { color: isDark ? '#aaa' : '#666' }]} numberOfLines={1}>
+                          {chatPosition}
+                        </Text>
+                      )}
+                    </View>
                     <Text style={[styles.chatTime, { color: isDark ? '#aaa' : '#999' }]}>
                       {formatMessageTime(lastMessage.timestamp)}
                     </Text>
@@ -651,11 +677,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 12,
     color: '#333',
+  },
+  resetButton: {
+    padding: 8,
+  },
+  resetButtonText: {
+    color: '#2196F3',
+    fontWeight: 'bold',
   },
   searchBar: {
     elevation: 0,
@@ -792,9 +830,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  employeeName: {
+  employeeDetails: {
+    flexDirection: 'column',
     marginLeft: 12,
+  },
+  employeeName: {
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  employeePosition: {
+    fontSize: 12,
+    marginTop: 2,
+    color: '#666',
   },
   modalFooter: {
     flexDirection: 'row',
@@ -810,9 +857,6 @@ const styles = StyleSheet.create({
   },
   employeesList: {
     padding: 16,
-  },
-  employeeDetails: {
-    flexDirection: 'column',
   },
   chatItem: {
     flexDirection: 'row',
@@ -830,6 +874,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'baseline',
     marginBottom: 4,
+  },
+  chatTitleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  chatPosition: {
+    fontSize: 12,
+    marginTop: 2,
+    color: '#666',
   },
   chatTime: {
     fontSize: 12,

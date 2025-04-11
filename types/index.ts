@@ -91,14 +91,35 @@ export interface TaskComment {
   authorName?: string; // Имя автора для отображения
 }
 
+export enum MessageContentType {
+  TEXT = 'text',
+  VOICE = 'voice',
+  FILE = 'file',
+  IMAGE = 'image',
+  EMOJI = 'emoji'
+}
+
+export interface MessageContent {
+  type: MessageContentType;
+  text?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileMimeType?: string;
+  voiceUrl?: string;
+  voiceDuration?: number;
+  imageUrl?: string;
+  emoji?: string;
+}
+
 export interface Message {
   id: string;
   senderId: string;
   receiverId: string | null; // null для общего чата
-  text: string;
+  chatRoomId?: string;
+  content: MessageContent;
+  text?: string; // Для обратной совместимости
   timestamp: Date;
   isRead: boolean;
-  attachments?: string[]; // URL вложений (если есть)
 }
 
 export interface ChatRoom {
@@ -106,8 +127,7 @@ export interface ChatRoom {
   name: string;
   isGroupChat: boolean;
   participants: string[];
-  lastMessage?: Message;
-  unreadCount?: number;
   createdAt: Date;
   updatedAt: Date;
+  lastMessage?: Message;
 } 

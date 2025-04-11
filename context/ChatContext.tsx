@@ -1,17 +1,23 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message, ChatRoom } from '../types';
+import { Message, ChatRoom, MessageContentType, MessageContent } from '../types';
 import { format } from 'date-fns';
 import { useAuth } from './AuthContext';
 
 // Демо-данные для сотрудников
-const DEMO_EMPLOYEES = [
+export const DEMO_EMPLOYEES = [
   { id: '1', name: 'Иванов Иван', position: 'Руководитель проекта', avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff' },
   { id: '2', name: 'Петрова Елена', position: 'Ведущий дизайнер', avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff' },
   { id: '3', name: 'Сидоров Алексей', position: 'Разработчик', avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff' },
   { id: '4', name: 'Козлова Мария', position: 'Тестировщик', avatarUrl: 'https://ui-avatars.com/api/?name=Maria+Kozlova&background=6A1B9A&color=fff' },
   { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
 ];
+
+// Функция для получения информации о сотруднике
+export const getEmployeeInfo = (userId: string) => {
+  return DEMO_EMPLOYEES.find(emp => emp.id === userId) || 
+    { id: userId, name: 'Неизвестный пользователь', position: 'Нет данных', avatarUrl: 'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff' };
+};
 
 // Демо-данные для чатов
 const DEMO_CHAT_ROOMS: ChatRoom[] = [
@@ -41,13 +47,21 @@ const DEMO_CHAT_ROOMS: ChatRoom[] = [
   },
 ];
 
+// Создание MessageContent из текста (для обратной совместимости)
+const createTextContent = (text: string): MessageContent => {
+  return {
+    type: MessageContentType.TEXT,
+    text
+  };
+};
+
 // Демо-данные для сообщений
 const DEMO_MESSAGES: Message[] = [
   {
     id: '1',
     senderId: '2',
     receiverId: null,
-    text: 'Всем привет! Напоминаю о встрече завтра в 10:00.',
+    content: createTextContent('Всем привет! Напоминаю о встрече завтра в 10:00.'),
     timestamp: new Date(Date.now() - 86400000),
     isRead: true,
   },
@@ -55,7 +69,7 @@ const DEMO_MESSAGES: Message[] = [
     id: '2',
     senderId: '3',
     receiverId: null,
-    text: 'Спасибо за напоминание. Буду вовремя.',
+    content: createTextContent('Спасибо за напоминание. Буду вовремя.'),
     timestamp: new Date(Date.now() - 86400000 + 3600000),
     isRead: true,
   },
@@ -63,7 +77,7 @@ const DEMO_MESSAGES: Message[] = [
     id: '3',
     senderId: '1',
     receiverId: null,
-    text: 'Не забудьте подготовить отчеты к встрече.',
+    content: createTextContent('Не забудьте подготовить отчеты к встрече.'),
     timestamp: new Date(Date.now() - 43200000),
     isRead: true,
   },
@@ -71,7 +85,7 @@ const DEMO_MESSAGES: Message[] = [
     id: '4',
     senderId: '2',
     receiverId: '1',
-    text: 'Иван, можешь помочь с задачей по проекту?',
+    content: createTextContent('Иван, можешь помочь с задачей по проекту?'),
     timestamp: new Date(Date.now() - 86400000 * 2),
     isRead: true,
   },
@@ -79,7 +93,7 @@ const DEMO_MESSAGES: Message[] = [
     id: '5',
     senderId: '1',
     receiverId: '2',
-    text: 'Конечно, давай обсудим завтра на встрече.',
+    content: createTextContent('Конечно, давай обсудим завтра на встрече.'),
     timestamp: new Date(Date.now() - 86400000 * 2 + 3600000),
     isRead: true,
   },
@@ -87,20 +101,62 @@ const DEMO_MESSAGES: Message[] = [
     id: '6',
     senderId: '3',
     receiverId: null,
-    text: 'У меня есть вопрос по последнему заданию.',
+    content: createTextContent('У меня есть вопрос по последнему заданию.'),
     timestamp: new Date(Date.now() - 7200000),
     isRead: false,
   },
+  // Примеры разных типов сообщений
+  {
+    id: '7',
+    senderId: '4',
+    receiverId: null,
+    content: {
+      type: MessageContentType.EMOJI,
+      emoji: '👍'
+    },
+    timestamp: new Date(Date.now() - 3600000),
+    isRead: false,
+  },
+  {
+    id: '8',
+    senderId: '5',
+    receiverId: null,
+    content: {
+      type: MessageContentType.FILE,
+      fileName: 'отчет_проект.pdf',
+      fileUrl: 'https://example.com/files/report.pdf',
+      fileMimeType: 'application/pdf'
+    },
+    timestamp: new Date(Date.now() - 1800000),
+    isRead: false,
+  },
+  {
+    id: '9',
+    senderId: '2',
+    receiverId: null,
+    content: {
+      type: MessageContentType.IMAGE,
+      imageUrl: 'https://example.com/images/prototype.jpg',
+      text: 'Новый прототип интерфейса'
+    },
+    timestamp: new Date(Date.now() - 1200000),
+    isRead: false,
+  }
 ];
 
 interface ChatContextType {
   chatRooms: ChatRoom[];
   messages: Message[];
   addMessage: (message: Omit<Message, 'id'>) => Promise<void>;
+  addVoiceMessage: (senderId: string, receiverId: string | null, chatRoomId: string, voiceUrl: string, duration: number) => Promise<void>;
+  addFileMessage: (senderId: string, receiverId: string | null, chatRoomId: string, fileUrl: string, fileName: string, fileMimeType: string) => Promise<void>;
+  addImageMessage: (senderId: string, receiverId: string | null, chatRoomId: string, imageUrl: string, caption?: string) => Promise<void>;
+  addEmojiMessage: (senderId: string, receiverId: string | null, chatRoomId: string, emoji: string) => Promise<void>;
   getMessagesForChat: (chatRoomId: string) => Message[];
   getUnreadCount: () => number;
   markMessageAsRead: (messageId: string) => Promise<void>;
   refreshChatData: () => Promise<void>;
+  resetAndRefreshChatData: () => Promise<void>;
   createGroupChat: (name: string, participants: string[]) => Promise<string>;
 }
 
@@ -120,6 +176,8 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
     if (!user) return existingRooms;
     
     const updatedRooms = [...existingRooms];
+    const updatedMessages = [...messages];
+    let hasAddedNewChats = false;
     
     // Создаем персональные чаты со всеми сотрудниками
     DEMO_EMPLOYEES.forEach(employee => {
@@ -136,35 +194,42 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
       
       // Если чата нет, создаем новый
       if (!existingChat) {
+        const uniqueId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const welcomeMessageId = `welcome_${uniqueId}`;
+        
+        // Создаем приветственное сообщение
+        const welcomeMessage: Message = {
+          id: welcomeMessageId,
+          senderId: employee.id,
+          receiverId: user.id,
+          chatRoomId: `personal_${uniqueId}`,
+          content: createTextContent(`Привет! Я ${employee.name}, ${employee.position}. Чем могу помочь?`),
+          timestamp: new Date(),
+          isRead: false
+        };
+        
+        // Создаем новый чат с полной информацией о сотруднике
         const newChat: ChatRoom = {
-          id: `personal_${Date.now()}_${employee.id}`,
-          name: employee.name,
+          id: `personal_${uniqueId}`,
+          name: `${employee.name} (${employee.position})`,
           isGroupChat: false,
           participants: [user.id, employee.id],
           createdAt: new Date(),
           updatedAt: new Date(),
-          // Добавляем приветственное сообщение в качестве lastMessage
-          lastMessage: {
-            id: `welcome_${Date.now()}_${employee.id}`,
-            senderId: employee.id,
-            receiverId: user.id,
-            text: 'Привет! Теперь мы можем общаться здесь.',
-            timestamp: new Date(),
-            isRead: false
-          }
+          lastMessage: welcomeMessage
         };
         
         updatedRooms.push(newChat);
-        
-        // Добавляем приветственное сообщение в список сообщений
-        const welcomeMessage: Message = {
-          ...newChat.lastMessage,
-          chatRoomId: newChat.id
-        };
-        
-        setMessages(prev => [...prev, welcomeMessage]);
+        updatedMessages.push(welcomeMessage);
+        hasAddedNewChats = true;
       }
     });
+    
+    // Обновляем сообщения только если были добавлены новые чаты
+    if (hasAddedNewChats) {
+      setMessages(updatedMessages);
+      saveMessages(updatedMessages);
+    }
     
     return updatedRooms;
   };
@@ -207,7 +272,19 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
           }
           return value;
         });
-        setMessages(parsedMessages);
+        
+        // Преобразуем старый формат сообщений (с полем text) в новый (с полем content)
+        const migratedMessages = parsedMessages.map((msg: any) => {
+          if (msg.text && !msg.content) {
+            return {
+              ...msg,
+              content: createTextContent(msg.text)
+            };
+          }
+          return msg;
+        });
+        
+        setMessages(migratedMessages);
       } else {
         // Если сообщений еще нет, используем демо-данные
         setMessages(DEMO_MESSAGES);
@@ -240,7 +317,6 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const addMessage = async (message: Omit<Message, 'id'>) => {
     try {
       // Проверяем, нет ли уже такого же сообщения с тем же текстом и временем
-      // Более строгая проверка - последние 3 сообщения, отправленные в течение 10 секунд
       const now = new Date().getTime();
       const recentMessages = messages
         .filter(msg => 
@@ -251,12 +327,18 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()) // сортируем по времени, сначала новые
         .slice(0, 3); // берем последние 3 сообщения
       
-      const duplicateFound = recentMessages.some(msg => msg.text === message.text);
-      
-      // Если дубликат найден, не добавляем сообщение
-      if (duplicateFound) {
-        console.log('Дубликат сообщения обнаружен, пропускаем:', message.text);
-        return;
+      // Проверяем на дубликаты только текстовые сообщения
+      if (message.content.type === MessageContentType.TEXT && message.content.text) {
+        const duplicateFound = recentMessages.some(msg => 
+          msg.content.type === MessageContentType.TEXT && 
+          msg.content.text === message.content.text
+        );
+        
+        // Если дубликат найден, не добавляем сообщение
+        if (duplicateFound) {
+          console.log('Дубликат сообщения обнаружен, пропускаем:', message.content.text);
+          return;
+        }
       }
       
       const newMessage = {
@@ -289,10 +371,10 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
             chatRoomId = existingRoom.id;
           } else {
             // Создаем новую комнату для личного чата
-            const receiverName = "Пользователь"; // Здесь должно быть имя получателя из данных пользователей
+            const receiverInfo = getEmployeeInfo(message.receiverId);
             const newRoom: ChatRoom = {
               id: `personal_${Date.now()}`,
-              name: receiverName,
+              name: receiverInfo.name,
               isGroupChat: false,
               participants,
               createdAt: new Date(),
@@ -328,6 +410,99 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
     } catch (error) {
       console.error('Ошибка добавления сообщения:', error);
     }
+  };
+
+  // Вспомогательные функции для отправки разных типов сообщений
+  const addVoiceMessage = async (
+    senderId: string, 
+    receiverId: string | null, 
+    chatRoomId: string, 
+    voiceUrl: string, 
+    duration: number
+  ) => {
+    const message: Omit<Message, 'id'> = {
+      senderId,
+      receiverId,
+      chatRoomId,
+      content: {
+        type: MessageContentType.VOICE,
+        voiceUrl,
+        voiceDuration: duration
+      },
+      timestamp: new Date(),
+      isRead: false
+    };
+    
+    await addMessage(message);
+  };
+  
+  const addFileMessage = async (
+    senderId: string, 
+    receiverId: string | null, 
+    chatRoomId: string, 
+    fileUrl: string, 
+    fileName: string, 
+    fileMimeType: string
+  ) => {
+    const message: Omit<Message, 'id'> = {
+      senderId,
+      receiverId,
+      chatRoomId,
+      content: {
+        type: MessageContentType.FILE,
+        fileUrl,
+        fileName,
+        fileMimeType
+      },
+      timestamp: new Date(),
+      isRead: false
+    };
+    
+    await addMessage(message);
+  };
+  
+  const addImageMessage = async (
+    senderId: string, 
+    receiverId: string | null, 
+    chatRoomId: string, 
+    imageUrl: string, 
+    caption?: string
+  ) => {
+    const message: Omit<Message, 'id'> = {
+      senderId,
+      receiverId,
+      chatRoomId,
+      content: {
+        type: MessageContentType.IMAGE,
+        imageUrl,
+        text: caption
+      },
+      timestamp: new Date(),
+      isRead: false
+    };
+    
+    await addMessage(message);
+  };
+  
+  const addEmojiMessage = async (
+    senderId: string, 
+    receiverId: string | null, 
+    chatRoomId: string, 
+    emoji: string
+  ) => {
+    const message: Omit<Message, 'id'> = {
+      senderId,
+      receiverId,
+      chatRoomId,
+      content: {
+        type: MessageContentType.EMOJI,
+        emoji
+      },
+      timestamp: new Date(),
+      isRead: false
+    };
+    
+    await addMessage(message);
   };
 
   const createGroupChat = async (name: string, participants: string[]): Promise<string> => {
@@ -456,16 +631,39 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
     await loadChatData();
   };
 
+  // Функция для полного сброса и перезагрузки данных (для отладки)
+  const resetAndRefreshChatData = async () => {
+    try {
+      // Удаляем существующие данные
+      await AsyncStorage.removeItem('@chatRooms');
+      await AsyncStorage.removeItem('@messages');
+      
+      // Перезагружаем с демо-данными
+      setChatRooms(DEMO_CHAT_ROOMS);
+      setMessages(DEMO_MESSAGES);
+      
+      // Полная перезагрузка с генерацией новых чатов
+      await loadChatData();
+    } catch (error) {
+      console.error('Ошибка сброса данных чата:', error);
+    }
+  };
+
   return (
     <ChatContext.Provider 
       value={{ 
         chatRooms, 
         messages, 
         addMessage, 
+        addVoiceMessage,
+        addFileMessage,
+        addImageMessage,
+        addEmojiMessage,
         getMessagesForChat,
         getUnreadCount,
         markMessageAsRead,
         refreshChatData,
+        resetAndRefreshChatData,
         createGroupChat
       }}
     >
