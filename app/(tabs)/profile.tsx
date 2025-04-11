@@ -3,8 +3,14 @@ import { View, Text, StyleSheet, ScrollView, Alert, Image, TouchableOpacity, Swi
 import { Avatar, Button, Divider, TextInput, Dialog, Portal } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { UserRole } from '../../types';
 import { router } from 'expo-router';
+
+// Определим UserRole прямо здесь, чтобы избежать проблем с импортом
+const UserRole = {
+  ADMIN: 'ADMIN',
+  MANAGER: 'MANAGER',
+  EMPLOYEE: 'EMPLOYEE'
+};
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();

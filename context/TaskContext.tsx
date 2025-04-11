@@ -1,6 +1,26 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Task, TaskPriority, TaskStatus } from '../types';
+import { Task } from '../types';
+
+// Константы для приоритетов задач
+const PRIORITY_LOW = 'LOW';
+const PRIORITY_MEDIUM = 'MEDIUM';
+const PRIORITY_HIGH = 'HIGH';
+const PRIORITY_URGENT = 'URGENT';
+
+// Константы для статусов задач
+const STATUS_ASSIGNED = 'ASSIGNED';
+const STATUS_IN_PROGRESS = 'IN_PROGRESS';
+const STATUS_COMPLETED = 'COMPLETED';
+const STATUS_CANCELLED = 'CANCELLED';
+
+// Определим объект TaskStatus для использования в коде
+const TaskStatus = {
+  ASSIGNED: STATUS_ASSIGNED,
+  IN_PROGRESS: STATUS_IN_PROGRESS,
+  COMPLETED: STATUS_COMPLETED,
+  CANCELLED: STATUS_CANCELLED
+};
 
 // Временные примеры задач
 const INITIAL_TASKS: Task[] = [
@@ -9,7 +29,7 @@ const INITIAL_TASKS: Task[] = [
     title: 'Разработать макет для нового проекта',
     description: 'Создать прототип пользовательского интерфейса для мобильного приложения',
     deadline: new Date(Date.now() + 86400000 * 2), // через 2 дня
-    priority: TaskPriority.HIGH,
+    priority: PRIORITY_HIGH,
     status: TaskStatus.IN_PROGRESS,
     assignedTo: '3',
     createdBy: '2',
@@ -21,7 +41,7 @@ const INITIAL_TASKS: Task[] = [
     title: 'Подготовить отчет по продажам',
     description: 'Подготовить квартальный отчет по продажам для совета директоров',
     deadline: new Date(Date.now() + 86400000 * 5), // через 5 дней
-    priority: TaskPriority.MEDIUM,
+    priority: PRIORITY_MEDIUM,
     status: TaskStatus.ASSIGNED,
     assignedTo: '3',
     createdBy: '1',
@@ -33,7 +53,7 @@ const INITIAL_TASKS: Task[] = [
     title: 'Запланировать встречу с клиентом',
     description: 'Организовать встречу с представителями ABC Corp для обсуждения нового контракта',
     deadline: new Date(Date.now() + 86400000 * 3),
-    priority: TaskPriority.URGENT,
+    priority: PRIORITY_URGENT,
     status: TaskStatus.ASSIGNED,
     assignedTo: '2',
     createdBy: '1',
@@ -45,7 +65,7 @@ const INITIAL_TASKS: Task[] = [
     title: 'Обновить документацию',
     description: 'Обновить техническую документацию для проекта XYZ',
     deadline: new Date(Date.now() + 86400000 * 10),
-    priority: TaskPriority.LOW,
+    priority: PRIORITY_LOW,
     status: TaskStatus.COMPLETED,
     assignedTo: '3',
     createdBy: '2',

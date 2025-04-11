@@ -1,13 +1,16 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
+import { useChat } from '../../context/ChatContext';
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text } from 'react-native';
 import { UserRole } from '../../types';
+import { Badge } from 'react-native-paper';
 
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
+  const { getUnreadCount } = useChat();
   const router = useRouter();
 
   useEffect(() => {
@@ -28,6 +31,13 @@ export default function TabLayout() {
   if (!user) {
     return null;
   }
+
+  // Количество непрочитанных сообщений
+  const unreadCount = getUnreadCount();
+
+  // Проверим наличие UserRole и создадим константы для ролей
+  const ADMIN_ROLE = 'ADMIN';
+  const MANAGER_ROLE = 'MANAGER';
 
   return (
     <Tabs
@@ -71,6 +81,31 @@ export default function TabLayout() {
       />
       
       <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Чат',
+          tabBarIcon: ({ color, size }) => (
+            <View>
+              <MaterialCommunityIcons name="chat" color={color} size={size} />
+              {unreadCount > 0 && (
+                <Badge 
+                  style={{ 
+                    position: 'absolute', 
+                    top: -5, 
+                    right: -10,
+                    backgroundColor: '#f44336',
+                  }}
+                >
+                  {unreadCount}
+                </Badge>
+              )}
+            </View>
+          ),
+          headerShown: false,
+        }}
+      />
+      
+      <Tabs.Screen
         name="explore"
         options={{
           title: 'Обзор',
@@ -81,7 +116,7 @@ export default function TabLayout() {
         }}
       />
       
-      {(user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) && (
+      {(user?.role === ADMIN_ROLE || user?.role === MANAGER_ROLE) && (
         <Tabs.Screen
           name="employees"
           options={{

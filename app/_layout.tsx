@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { AuthProvider } from '../context/AuthContext';
 import { TaskProvider } from '../context/TaskContext';
 import { MeetingProvider } from '../context/MeetingContext';
+import { ChatProvider } from '../context/ChatContext';
 import { PaperProvider } from 'react-native-paper';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -35,16 +36,18 @@ export default function RootLayout() {
     <AuthProvider>
       <TaskProvider>
         <MeetingProvider>
-          <PaperProvider>
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <Stack>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="+not-found" />
-              </Stack>
-              <StatusBar style="auto" />
-            </ThemeProvider>
-          </PaperProvider>
+          <ChatProvider>
+            <PaperProvider>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </PaperProvider>
+          </ChatProvider>
         </MeetingProvider>
       </TaskProvider>
     </AuthProvider>

@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
 import { Avatar, Button, FAB, ActivityIndicator, Dialog, Portal, Chip, Searchbar, SegmentedButtons } from 'react-native-paper';
-import { User, UserRole } from '../../types';
+import { User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+// Определим UserRole прямо здесь, чтобы избежать проблем с импортом
+const UserRole = {
+  ADMIN: 'ADMIN',
+  MANAGER: 'MANAGER',
+  EMPLOYEE: 'EMPLOYEE'
+};
+
+// Обновим тип User
+interface EmployeeUser extends User {
+  role: string;
+}
+
 // Временный список сотрудников
-const DEMO_USERS: User[] = [
+const DEMO_USERS: EmployeeUser[] = [
   {
     id: '1',
     email: 'admin@company.com',
@@ -63,12 +75,12 @@ const DEMO_USERS: User[] = [
 
 export default function EmployeesScreen() {
   const { user } = useAuth();
-  const [employees, setEmployees] = useState<User[]>([]);
-  const [filteredEmployees, setFilteredEmployees] = useState<User[]>([]);
+  const [employees, setEmployees] = useState<EmployeeUser[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<EmployeeUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeUser | null>(null);
   const [detailDialogVisible, setDetailDialogVisible] = useState(false);
   const [addDialogVisible, setAddDialogVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -126,7 +138,7 @@ export default function EmployeesScreen() {
     setFilteredEmployees(filtered);
   };
 
-  const handleEmployeePress = (employee: User) => {
+  const handleEmployeePress = (employee: EmployeeUser) => {
     setSelectedEmployee(employee);
     setDetailDialogVisible(true);
   };
@@ -153,7 +165,7 @@ export default function EmployeesScreen() {
     
     // Добавляем нового сотрудника
     const newId = (Math.max(...employees.map(e => parseInt(e.id))) + 1).toString();
-    const newUser: User = {
+    const newUser: EmployeeUser = {
       id: newId,
       ...newEmployee,
       avatarUrl: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 50)}`,
@@ -192,7 +204,7 @@ export default function EmployeesScreen() {
     }
   };
 
-  const getRoleText = (role: UserRole) => {
+  const getRoleText = (role: string) => {
     switch (role) {
       case UserRole.ADMIN:
         return 'Администратор';
@@ -205,7 +217,7 @@ export default function EmployeesScreen() {
     }
   };
 
-  const getRoleColor = (role: UserRole) => {
+  const getRoleColor = (role: string) => {
     switch (role) {
       case UserRole.ADMIN:
         return '#f44336';
@@ -218,7 +230,7 @@ export default function EmployeesScreen() {
     }
   };
 
-  const renderEmployeeItem = ({ item }: { item: User }) => {
+  const renderEmployeeItem = ({ item }: { item: EmployeeUser }) => {
     return (
       <TouchableOpacity
         style={styles.employeeItem}
@@ -446,7 +458,7 @@ export default function EmployeesScreen() {
             <Text style={styles.roleLabel}>Роль:</Text>
             <SegmentedButtons
               value={newEmployee.role}
-              onValueChange={(value) => setNewEmployee({ ...newEmployee, role: value as UserRole })}
+              onValueChange={(value) => setNewEmployee({ ...newEmployee, role: value as string })}
               buttons={[
                 { value: UserRole.EMPLOYEE, label: 'Сотрудник' },
                 { value: UserRole.MANAGER, label: 'Менеджер' },

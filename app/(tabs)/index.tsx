@@ -4,7 +4,7 @@ import { Card, Button, FAB, Avatar } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { useTask } from '../../context/TaskContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Task, TaskPriority, TaskStatus, Meeting, UserRole } from '../../types';
+import { Task, Meeting } from '../../types';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
@@ -43,6 +43,38 @@ const DEMO_MEETINGS: Meeting[] = [
     updatedAt: new Date(Date.now() - 43200000),
   },
 ];
+
+// Константы для приоритетов задач
+const PRIORITY_LOW = 'LOW';
+const PRIORITY_MEDIUM = 'MEDIUM';
+const PRIORITY_HIGH = 'HIGH';
+const PRIORITY_URGENT = 'URGENT';
+
+// Константы для статусов задач
+const STATUS_ASSIGNED = 'ASSIGNED';
+const STATUS_IN_PROGRESS = 'IN_PROGRESS';
+const STATUS_COMPLETED = 'COMPLETED';
+const STATUS_CANCELLED = 'CANCELLED';
+
+// Определим объект TaskStatus для использования в коде
+const TaskStatus = {
+  ASSIGNED: STATUS_ASSIGNED,
+  IN_PROGRESS: STATUS_IN_PROGRESS,
+  COMPLETED: STATUS_COMPLETED,
+  CANCELLED: STATUS_CANCELLED
+};
+
+// Константы для ролей пользователей
+const ROLE_ADMIN = 'ADMIN';
+const ROLE_MANAGER = 'MANAGER';
+const ROLE_EMPLOYEE = 'EMPLOYEE';
+
+// Определим объект UserRole для использования в коде
+const UserRole = {
+  ADMIN: ROLE_ADMIN,
+  MANAGER: ROLE_MANAGER,
+  EMPLOYEE: ROLE_EMPLOYEE
+};
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -254,15 +286,15 @@ export default function HomeScreen() {
 }
 
 // Вспомогательные функции для стилей задач
-const getPriorityColor = (priority: TaskPriority) => {
+const getPriorityColor = (priority: string) => {
   switch (priority) {
-    case TaskPriority.LOW:
+    case PRIORITY_LOW:
       return '#28a745';
-    case TaskPriority.MEDIUM:
+    case PRIORITY_MEDIUM:
       return '#ffc107';
-    case TaskPriority.HIGH:
+    case PRIORITY_HIGH:
       return '#fd7e14';
-    case TaskPriority.URGENT:
+    case PRIORITY_URGENT:
       return '#dc3545';
     default:
       return '#6c757d';

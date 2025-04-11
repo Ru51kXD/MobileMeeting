@@ -89,4 +89,25 @@ export interface TaskComment {
   createdBy: string;
   createdAt: Date;
   authorName?: string; // Имя автора для отображения
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  receiverId: string | null; // null для общего чата
+  text: string;
+  timestamp: Date;
+  isRead: boolean;
+  attachments?: string[]; // URL вложений (если есть)
+}
+
+export interface ChatRoom {
+  id: string;
+  name: string;
+  isGroupChat: boolean;
+  participants: string[];
+  lastMessage?: Message;
+  unreadCount?: number;
+  createdAt: Date;
+  updatedAt: Date;
 } 

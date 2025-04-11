@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions, ScrollView } from 'react-native';
 import { Searchbar, FAB, Chip, Menu, Divider, Button, ActivityIndicator, Dialog, Portal, Avatar } from 'react-native-paper';
-import { Task, TaskPriority, TaskStatus, UserRole } from '../../../types';
+import { Task } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
 import { useTask } from '../../../context/TaskContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,6 +18,46 @@ const DEMO_EMPLOYEES = [
   { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
 ];
 
+// Константы для приоритетов задач
+const PRIORITY_LOW = 'LOW';
+const PRIORITY_MEDIUM = 'MEDIUM';
+const PRIORITY_HIGH = 'HIGH';
+const PRIORITY_URGENT = 'URGENT';
+
+// Определим объект TaskPriority для использования в коде
+const TaskPriority = {
+  LOW: PRIORITY_LOW,
+  MEDIUM: PRIORITY_MEDIUM,
+  HIGH: PRIORITY_HIGH,
+  URGENT: PRIORITY_URGENT
+};
+
+// Константы для статусов задач
+const STATUS_ASSIGNED = 'ASSIGNED';
+const STATUS_IN_PROGRESS = 'IN_PROGRESS';
+const STATUS_COMPLETED = 'COMPLETED';
+const STATUS_CANCELLED = 'CANCELLED';
+
+// Определим объект TaskStatus для использования в коде
+const TaskStatus = {
+  ASSIGNED: STATUS_ASSIGNED,
+  IN_PROGRESS: STATUS_IN_PROGRESS,
+  COMPLETED: STATUS_COMPLETED,
+  CANCELLED: STATUS_CANCELLED
+};
+
+// Константы для ролей пользователей
+const ROLE_ADMIN = 'ADMIN';
+const ROLE_MANAGER = 'MANAGER';
+const ROLE_EMPLOYEE = 'EMPLOYEE';
+
+// Определим объект UserRole для использования в коде
+const UserRole = {
+  ADMIN: ROLE_ADMIN,
+  MANAGER: ROLE_MANAGER,
+  EMPLOYEE: ROLE_EMPLOYEE
+};
+
 export default function TasksScreen() {
   const { user } = useAuth();
   const { tasks: allTasks, refreshTasks, updateTask } = useTask();
@@ -27,8 +67,8 @@ export default function TasksScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMenuVisible, setFilterMenuVisible] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<TaskStatus | null>(null);
-  const [selectedPriority, setSelectedPriority] = useState<TaskPriority | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<string | null>(null);
   const [sortOption, setSortOption] = useState<'deadline' | 'priority' | 'status'>('deadline');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
@@ -112,10 +152,10 @@ export default function TasksScreen() {
       
       if (sortOption === 'priority') {
         const priorityOrder = { 
-          [TaskPriority.LOW]: 1, 
-          [TaskPriority.MEDIUM]: 2, 
-          [TaskPriority.HIGH]: 3, 
-          [TaskPriority.URGENT]: 4 
+          [PRIORITY_LOW]: 1, 
+          [PRIORITY_MEDIUM]: 2, 
+          [PRIORITY_HIGH]: 3, 
+          [PRIORITY_URGENT]: 4 
         };
         const prioA = priorityOrder[a.priority];
         const prioB = priorityOrder[b.priority];
@@ -148,15 +188,15 @@ export default function TasksScreen() {
     setSearchQuery('');
   };
 
-  const getTaskPriorityColor = (priority: TaskPriority) => {
+  const getTaskPriorityColor = (priority: string) => {
     switch (priority) {
-      case TaskPriority.LOW:
+      case PRIORITY_LOW:
         return '#28a745';
-      case TaskPriority.MEDIUM:
+      case PRIORITY_MEDIUM:
         return '#ffc107';
-      case TaskPriority.HIGH:
+      case PRIORITY_HIGH:
         return '#fd7e14';
-      case TaskPriority.URGENT:
+      case PRIORITY_URGENT:
         return '#dc3545';
       default:
         return '#6c757d';

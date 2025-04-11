@@ -26,10 +26,31 @@ import {
 import { router } from 'expo-router';
 import { useAuth } from '../../../context/AuthContext';
 import { useTask } from '../../../context/TaskContext';
-import { Task, TaskPriority, TaskStatus } from '../../../types';
+import { Task } from '../../../types';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import DateTimePicker from '../../../components/DateTimePicker';
+
+// Константы для приоритетов задач
+const PRIORITY_LOW = 'LOW';
+const PRIORITY_MEDIUM = 'MEDIUM';
+const PRIORITY_HIGH = 'HIGH';
+const PRIORITY_URGENT = 'URGENT';
+
+// Константы для статусов задач
+const STATUS_ASSIGNED = 'ASSIGNED';
+const STATUS_IN_PROGRESS = 'IN_PROGRESS';
+const STATUS_COMPLETED = 'COMPLETED';
+const STATUS_CANCELLED = 'CANCELLED';
+
+// Определим объект TaskStatus для использования в коде
+const TaskStatus = {
+  ASSIGNED: STATUS_ASSIGNED,
+  IN_PROGRESS: STATUS_IN_PROGRESS,
+  COMPLETED: STATUS_COMPLETED,
+  CANCELLED: STATUS_CANCELLED
+};
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
@@ -48,7 +69,7 @@ export default function CreateTaskScreen() {
     title: '',
     description: '',
     deadline: new Date(Date.now() + 24 * 60 * 60 * 1000), // Завтра по умолчанию
-    priority: TaskPriority.MEDIUM,
+    priority: PRIORITY_MEDIUM,
     status: TaskStatus.ASSIGNED,
     assignedTo: user?.id || '',
     createdBy: user?.id || '',
@@ -161,12 +182,12 @@ export default function CreateTaskScreen() {
     setEmployeePickerVisible(false);
   };
 
-  const getPriorityColor = (priority: TaskPriority) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case TaskPriority.LOW: return '#28a745';
-      case TaskPriority.MEDIUM: return '#ffc107';
-      case TaskPriority.HIGH: return '#fd7e14';
-      case TaskPriority.URGENT: return '#dc3545';
+      case PRIORITY_LOW: return '#28a745';
+      case PRIORITY_MEDIUM: return '#ffc107';
+      case PRIORITY_HIGH: return '#fd7e14';
+      case PRIORITY_URGENT: return '#dc3545';
       default: return '#6c757d';
     }
   };
@@ -273,48 +294,48 @@ export default function CreateTaskScreen() {
             <TouchableOpacity
               style={[
                 styles.priorityButton,
-                task.priority === TaskPriority.LOW && styles.priorityButtonSelected,
-                { borderColor: getPriorityColor(TaskPriority.LOW) }
+                task.priority === PRIORITY_LOW && styles.priorityButtonSelected,
+                { borderColor: getPriorityColor(PRIORITY_LOW) }
               ]}
-              onPress={() => setTask({ ...task, priority: TaskPriority.LOW })}
+              onPress={() => setTask({ ...task, priority: PRIORITY_LOW })}
             >
-              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(TaskPriority.LOW) }]} />
+              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(PRIORITY_LOW) }]} />
               <Text style={styles.priorityText}>Низкий</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.priorityButton,
-                task.priority === TaskPriority.MEDIUM && styles.priorityButtonSelected,
-                { borderColor: getPriorityColor(TaskPriority.MEDIUM) }
+                task.priority === PRIORITY_MEDIUM && styles.priorityButtonSelected,
+                { borderColor: getPriorityColor(PRIORITY_MEDIUM) }
               ]}
-              onPress={() => setTask({ ...task, priority: TaskPriority.MEDIUM })}
+              onPress={() => setTask({ ...task, priority: PRIORITY_MEDIUM })}
             >
-              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(TaskPriority.MEDIUM) }]} />
+              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(PRIORITY_MEDIUM) }]} />
               <Text style={styles.priorityText}>Средний</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.priorityButton,
-                task.priority === TaskPriority.HIGH && styles.priorityButtonSelected,
-                { borderColor: getPriorityColor(TaskPriority.HIGH) }
+                task.priority === PRIORITY_HIGH && styles.priorityButtonSelected,
+                { borderColor: getPriorityColor(PRIORITY_HIGH) }
               ]}
-              onPress={() => setTask({ ...task, priority: TaskPriority.HIGH })}
+              onPress={() => setTask({ ...task, priority: PRIORITY_HIGH })}
             >
-              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(TaskPriority.HIGH) }]} />
+              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(PRIORITY_HIGH) }]} />
               <Text style={styles.priorityText}>Высокий</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.priorityButton,
-                task.priority === TaskPriority.URGENT && styles.priorityButtonSelected,
-                { borderColor: getPriorityColor(TaskPriority.URGENT) }
+                task.priority === PRIORITY_URGENT && styles.priorityButtonSelected,
+                { borderColor: getPriorityColor(PRIORITY_URGENT) }
               ]}
-              onPress={() => setTask({ ...task, priority: TaskPriority.URGENT })}
+              onPress={() => setTask({ ...task, priority: PRIORITY_URGENT })}
             >
-              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(TaskPriority.URGENT) }]} />
+              <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(PRIORITY_URGENT) }]} />
               <Text style={styles.priorityText}>Срочный</Text>
             </TouchableOpacity>
           </View>
