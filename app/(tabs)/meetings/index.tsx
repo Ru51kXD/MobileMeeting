@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { Calendar, CalendarProps, DateData } from 'react-native-calendars';
 import { Button, FAB, ActivityIndicator, Chip, Dialog, Portal } from 'react-native-paper';
-import { Meeting, UserRole } from '../../types';
-import { useAuth } from '../../context/AuthContext';
-import { useMeeting } from '../../context/MeetingContext';
+import { Meeting, UserRole } from '../../../types';
+import { useAuth } from '../../../context/AuthContext';
+import { useMeeting } from '../../../context/MeetingContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -151,6 +151,11 @@ export default function MeetingsScreen() {
 
   const selectedDateMeetings = getMeetingsForSelectedDate();
 
+  // Функция для перехода на экран создания митинга
+  const goToCreateMeeting = () => {
+    router.push('/(tabs)/meetings/create');
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.calendarContainer}>
@@ -214,6 +219,13 @@ export default function MeetingsScreen() {
         />
       </View>
       
+      <FAB
+        style={styles.fab}
+        icon="plus"
+        onPress={goToCreateMeeting}
+        color="#ffffff"
+      />
+      
       <Portal>
         <Dialog 
           visible={detailDialogVisible}
@@ -254,43 +266,28 @@ export default function MeetingsScreen() {
               </Dialog.Content>
               <Dialog.Actions>
                 <Button onPress={() => setDetailDialogVisible(false)}>Закрыть</Button>
-                <Button 
-                  mode="contained"
-                  onPress={() => {
-                    // Здесь будет логика синхронизации с календарем
-                    setDetailDialogVisible(false);
-                  }}
-                >
-                  Добавить в календарь
-                </Button>
               </Dialog.Actions>
             </>
           )}
         </Dialog>
       </Portal>
-      
-      {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
-        <FAB
-          icon="plus"
-          style={styles.fab}
-          onPress={() => router.push('/(tabs)/meetings/create')}
-        />
-      )}
     </View>
   );
 }
 
-// Вспомогательная функция для правильного склонения слова "митинг"
 function getCorrectWordForm(count: number): string {
-  if (count === 0) {
+  const lastDigit = count % 10;
+  const lastTwoDigits = count % 100;
+  
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
     return 'митингов';
   }
   
-  if (count === 1) {
+  if (lastDigit === 1) {
     return 'митинг';
   }
   
-  if (count >= 2 && count <= 4) {
+  if (lastDigit >= 2 && lastDigit <= 4) {
     return 'митинга';
   }
   
@@ -309,21 +306,25 @@ const styles = StyleSheet.create({
   },
   calendarContainer: {
     backgroundColor: '#ffffff',
-    elevation: 2,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   calendar: {
-    paddingBottom: 10,
+    borderRadius: 10,
   },
   meetingsContainer: {
     flex: 1,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: -10,
+    paddingTop: 16,
+    paddingHorizontal: 16,
   },
   meetingsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginBottom: 12,
   },
   meetingsTitle: {
     fontSize: 18,
@@ -335,17 +336,23 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   meetingsList: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 80,
   },
   meetingItem: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 8,
-    elevation: 1,
+    padding: 12,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
   },
   pastMeetingItem: {
+    borderLeftColor: '#9e9e9e',
     opacity: 0.7,
   },
   meetingHeader: {
@@ -362,15 +369,18 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   timeChip: {
-    backgroundColor: '#e0f7fa',
+    backgroundColor: '#e3f2fd',
+    height: 30,
   },
   meetingDescription: {
+    fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   meetingFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 4,
   },
   organizerContainer: {
     flexDirection: 'row',
@@ -390,17 +400,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    color: '#666',
-    marginTop: 8,
-    fontSize: 16,
-    textAlign: 'center',
-  },
   fab: {
     position: 'absolute',
     margin: 16,
@@ -408,19 +407,31 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#2196F3',
   },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    marginTop: 16,
+    color: '#999',
+    textAlign: 'center',
+  },
   dialog: {
-    maxHeight: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 8,
   },
   dialogSection: {
     marginBottom: 16,
   },
   dialogSectionTitle: {
+    fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 4,
     color: '#666',
+    marginBottom: 4,
   },
   dialogText: {
     fontSize: 16,
-    lineHeight: 24,
+    color: '#333',
   },
 }); 

@@ -55,6 +55,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="checkbox-marked-outline" color={color} size={size} />
           ),
+          headerShown: false,
         }}
       />
       
@@ -65,6 +66,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="calendar-month" color={color} size={size} />
           ),
+          headerShown: false,
+        }}
+      />
+      
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Обзор',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="compass" color={color} size={size} />
+          ),
+          headerShown: false,
         }}
       />
       
