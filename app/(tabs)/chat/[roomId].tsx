@@ -30,6 +30,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Icon } from '@/components/Icon';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import { VoiceRecorder } from '@/components/chat/VoiceRecorder';
+import { VoiceMessage } from '@/components/chat/VoiceMessage';
 
 // Компонент для отображения даты сообщений в чате (с поддержкой темной темы)
 const DateSeparator = ({ date, isDark }: { date: Date, isDark: boolean }) => {
@@ -173,6 +175,7 @@ export default function ChatRoomScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   
   // Для отслеживания последнего отправленного сообщения
   const lastSentMessageRef = useRef<{text: string, timestamp: number} | null>(null);
@@ -504,20 +507,46 @@ export default function ChatRoomScreen() {
     }
   };
 
-  // Функция для отображения меню вложений
-  const toggleAttachmentMenu = () => {
-    setShowAttachmentMenu(!showAttachmentMenu);
-  };
-
-  // Обработчик изменения текста ввода
-  const handleTextChange = (text: string) => {
-    setNewMessage(text);
-    
-    // Симулируем индикатор печати
-    if (!isTyping && text.length > 0) {
-      setIsTyping(true);
-      // Через 3 секунды скрываем индикатор
-      setTimeout(() => setIsTyping(false), 3000);
+  // Обработчик для отправки голосового сообщения
+  const handleSendVoiceMessage = async (audioUri: string, duration: number) => {
+    try {
+      if (!user || !currentChatRoom) return;
+      
+      setIsSending(true);
+      
+      const receiverId = currentChatRoom.isGroupChat 
+        ? currentChatRoom.id 
+        : currentChatRoom.participants.find(id => id !== user.id) || null;
+      
+      // Создаем сообщение с голосовой записью
+      const messageToSend: Omit<Message, 'id'> = {
+        senderId: user.id,
+        receiverId: receiverId,
+        chatRoomId: currentChatRoom.id,
+        content: {
+          type: MessageContentType.VOICE,
+          voiceUrl: audioUri,
+          voiceDuration: duration
+        },
+        timestamp: new Date(),
+        isRead: false,
+      };
+      
+      // Закрываем рекордер
+      setShowVoiceRecorder(false);
+      
+      // Добавляем сообщение
+      await addMessage(messageToSend);
+      
+      // Прокручиваем к последнему сообщению
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+        setIsSending(false);
+      }, 300);
+    } catch (error) {
+      console.error('Ошибка при отправке голосового сообщения:', error);
+      Alert.alert('Ошибка', 'Не удалось отправить голосовое сообщение');
+      setIsSending(false);
     }
   };
 
@@ -549,6 +578,7 @@ export default function ChatRoomScreen() {
       else if (item.content.type === MessageContentType.FILE) type = 'file';
       else if (item.content.type === MessageContentType.IMAGE) type = 'image';
       else if (item.content.type === MessageContentType.EMOJI) type = 'emoji';
+      else if (item.content.type === MessageContentType.VOICE) type = 'voice';
       
       // Создаем метаданные в ожидаемом формате
       const metadata = {
@@ -584,6 +614,20 @@ export default function ChatRoomScreen() {
                 {item.content.emoji}
               </Text>
             </View>
+            <Text style={[styles.messageTime, dynamicStyles.messageTime]}>
+              {formatMessageTime(item.timestamp)}
+            </Text>
+          </>
+        );
+      } else if (type === 'voice') {
+        return (
+          <>
+            <VoiceMessage 
+              uri={item.content.voiceUrl || ''}
+              duration={item.content.voiceDuration || 0}
+              isDark={isDark}
+              isOutgoing={isOwnMessage}
+            />
             <Text style={[styles.messageTime, dynamicStyles.messageTime]}>
               {formatMessageTime(item.timestamp)}
             </Text>
@@ -666,6 +710,33 @@ export default function ChatRoomScreen() {
       marginTop: 8,
       marginBottom: 16,
     };
+  };
+
+  // Переключатель для записи голоса
+  const toggleVoiceRecorder = () => {
+    // Если открыт инпут или меню вложений - закрываем их
+    if (showAttachmentMenu) {
+      setShowAttachmentMenu(false);
+    }
+    
+    setShowVoiceRecorder(!showVoiceRecorder);
+  };
+
+  // Функция для отображения меню вложений
+  const toggleAttachmentMenu = () => {
+    setShowAttachmentMenu(!showAttachmentMenu);
+  };
+
+  // Обработчик изменения текста ввода
+  const handleTextChange = (text: string) => {
+    setNewMessage(text);
+    
+    // Симулируем индикатор печати
+    if (!isTyping && text.length > 0) {
+      setIsTyping(true);
+      // Через 3 секунды скрываем индикатор
+      setTimeout(() => setIsTyping(false), 3000);
+    }
   };
 
   return (
@@ -825,103 +896,137 @@ export default function ChatRoomScreen() {
           </View>
         )}
         
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
-          <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
-            {/* Кнопка для открытия меню вложений */}
-            <TouchableOpacity
-              style={[styles.inputIconButton, showAttachmentMenu && styles.inputIconButtonActive]}
-              onPress={toggleAttachmentMenu}
-              activeOpacity={0.7}
-            >
-              <Icon 
-                name="paperclip" 
-                size={24} 
-                color={showAttachmentMenu ? '#2196F3' : dynamicStyles.iconButton.color} 
-              />
-            </TouchableOpacity>
-            
-            {/* Кнопка эмодзи */}
-            <TouchableOpacity
-              style={styles.inputIconButton}
-              onPress={() => handleSendEmoji('👍')}
-              activeOpacity={0.7}
-            >
-              <Icon name="smile" size={24} color={dynamicStyles.iconButton.color} />
-            </TouchableOpacity>
-            
-            <TextInput
-              ref={inputRef}
-              style={[styles.input, dynamicStyles.input]}
-              value={newMessage}
-              onChangeText={handleTextChange}
-              placeholder="Введите сообщение..."
-              placeholderTextColor={isDark ? '#888' : '#999'}
-              mode="flat"
-              multiline
-              theme={{ colors: { primary: '#2196F3' } }}
-              underlineColor="transparent"
-            />
-            
-            <TouchableOpacity
-              style={[
-                styles.sendButton, 
-                {
-                  backgroundColor: newMessage.trim() ? '#2196F3' : isDark ? '#333' : '#e0e0e0',
-                  opacity: isSending ? 0.5 : 1
-                }
-              ]}
-              onPress={handleSendMessage}
-              disabled={!newMessage.trim() || isSending}
-              activeOpacity={0.7}
-            >
-              <Icon name="send" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Меню вложений */}
-          {showAttachmentMenu && (
-            <View style={[styles.attachmentMenu, {
-              backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
-              borderTopColor: isDark ? '#333' : '#e0e0e0'
-            }]}>
-              <TouchableOpacity 
-                style={styles.attachmentOption} 
-                onPress={() => {
-                  handleSendImage();
-                  toggleAttachmentMenu();
-                }}
+        {/* Панель записи голосового сообщения */}
+        {showVoiceRecorder ? (
+          <VoiceRecorder 
+            onRecordComplete={handleSendVoiceMessage}
+            onCancel={() => setShowVoiceRecorder(false)}
+            visible={showVoiceRecorder}
+            isDark={isDark}
+          />
+        ) : (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          >
+            <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+              {/* Кнопка для открытия меню вложений */}
+              <TouchableOpacity
+                style={[styles.inputIconButton, showAttachmentMenu && styles.inputIconButtonActive]}
+                onPress={toggleAttachmentMenu}
+                activeOpacity={0.7}
               >
-                <IconButton icon="image" size={24} color="#2196F3" />
-                <Text style={{ color: isDark ? '#fff' : '#333' }}>Изображение</Text>
+                <Icon 
+                  name="paperclip" 
+                  size={24} 
+                  color={showAttachmentMenu ? '#2196F3' : dynamicStyles.iconButton.color} 
+                />
               </TouchableOpacity>
               
-              <TouchableOpacity 
-                style={styles.attachmentOption} 
-                onPress={() => {
-                  handleSendFile();
-                  toggleAttachmentMenu();
-                }}
+              {/* Кнопка микрофона */}
+              <TouchableOpacity
+                style={styles.inputIconButton}
+                onPress={toggleVoiceRecorder}
+                activeOpacity={0.7}
               >
-                <IconButton icon="file-document" size={24} color="#4CAF50" />
-                <Text style={{ color: isDark ? '#fff' : '#333' }}>Файл</Text>
+                <Icon 
+                  name="mic" 
+                  size={24} 
+                  color={dynamicStyles.iconButton.color} 
+                />
               </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.attachmentOption} 
-                onPress={() => {
-                  handleSendEmoji('🤔');
-                  toggleAttachmentMenu();
-                }}
+              
+              {/* Кнопка эмодзи */}
+              <TouchableOpacity
+                style={styles.inputIconButton}
+                onPress={() => handleSendEmoji('👍')}
+                activeOpacity={0.7}
               >
-                <IconButton icon="emoticon-excited" size={24} color="#FFC107" />
-                <Text style={{ color: isDark ? '#fff' : '#333' }}>Эмодзи</Text>
+                <Icon name="smile" size={24} color={dynamicStyles.iconButton.color} />
+              </TouchableOpacity>
+              
+              <TextInput
+                ref={inputRef}
+                style={[styles.input, dynamicStyles.input]}
+                value={newMessage}
+                onChangeText={handleTextChange}
+                placeholder="Введите сообщение..."
+                placeholderTextColor={isDark ? '#888' : '#999'}
+                mode="flat"
+                multiline
+                theme={{ colors: { primary: '#2196F3' } }}
+                underlineColor="transparent"
+              />
+              
+              <TouchableOpacity
+                style={[
+                  styles.sendButton, 
+                  {
+                    backgroundColor: newMessage.trim() ? '#2196F3' : isDark ? '#333' : '#e0e0e0',
+                    opacity: isSending ? 0.5 : 1
+                  }
+                ]}
+                onPress={handleSendMessage}
+                disabled={!newMessage.trim() || isSending}
+                activeOpacity={0.7}
+              >
+                <Icon name="send" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
-          )}
-        </KeyboardAvoidingView>
+            
+            {/* Меню вложений */}
+            {showAttachmentMenu && (
+              <View style={[styles.attachmentMenu, {
+                backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+                borderTopColor: isDark ? '#333' : '#e0e0e0'
+              }]}>
+                <TouchableOpacity 
+                  style={styles.attachmentOption} 
+                  onPress={() => {
+                    handleSendImage();
+                    toggleAttachmentMenu();
+                  }}
+                >
+                  <IconButton icon="image" size={24} color="#2196F3" />
+                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Изображение</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.attachmentOption} 
+                  onPress={() => {
+                    handleSendFile();
+                    toggleAttachmentMenu();
+                  }}
+                >
+                  <IconButton icon="file-document" size={24} color="#4CAF50" />
+                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Файл</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.attachmentOption} 
+                  onPress={() => {
+                    handleSendEmoji('🤔');
+                    toggleAttachmentMenu();
+                  }}
+                >
+                  <IconButton icon="emoticon-excited" size={24} color="#FFC107" />
+                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Эмодзи</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.attachmentOption} 
+                  onPress={() => {
+                    toggleVoiceRecorder();
+                    toggleAttachmentMenu();
+                  }}
+                >
+                  <IconButton icon="microphone" size={24} color="#9C27B0" />
+                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Голосовое</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </KeyboardAvoidingView>
+        )}
         
         {/* Модальное окно профиля сотрудника */}
         <Modal
