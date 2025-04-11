@@ -41,6 +41,7 @@ export interface Task {
   updatedAt: Date | string;
   attachments?: string[]; // URLs to attachments
   comments?: Comment[];
+  taskComments?: TaskComment[]; // Добавляем массив комментариев
 }
 
 export interface Comment {
@@ -79,4 +80,13 @@ export interface Department {
   name: string;
   managerId?: string; // User ID
   parentDepartmentId?: string;
+}
+
+// Новый интерфейс для комментариев
+export interface TaskComment {
+  id: string;
+  text: string;
+  createdBy: string;
+  createdAt: Date;
+  authorName?: string; // Имя автора для отображения
 } 

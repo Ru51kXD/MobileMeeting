@@ -4,60 +4,15 @@ import { Calendar, CalendarProps, DateData } from 'react-native-calendars';
 import { Button, FAB, ActivityIndicator, Chip, Dialog, Portal } from 'react-native-paper';
 import { Meeting, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useMeeting } from '../../context/MeetingContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
-
-// Временные примеры митингов
-const DEMO_MEETINGS: Meeting[] = [
-  {
-    id: '1',
-    title: 'Обсуждение нового проекта',
-    description: 'Встреча команды для обсуждения стратегии разработки нового проекта',
-    startTime: new Date(Date.now() + 86400000), // завтра
-    endTime: new Date(Date.now() + 86400000 + 7200000), // завтра + 2 часа
-    organizer: '2',
-    participants: ['1', '2', '3'],
-    createdAt: new Date(Date.now() - 86400000 * 2),
-    updatedAt: new Date(Date.now() - 86400000),
-  },
-  {
-    id: '2',
-    title: 'Ежедневный статус-митинг',
-    description: 'Короткая встреча для обсуждения текущего прогресса задач',
-    startTime: new Date(Date.now() + 3600000), // через час
-    endTime: new Date(Date.now() + 3600000 + 1800000), // через час + 30 минут
-    organizer: '2',
-    participants: ['2', '3'],
-    createdAt: new Date(Date.now() - 86400000),
-    updatedAt: new Date(Date.now() - 43200000),
-  },
-  {
-    id: '3',
-    title: 'Ретроспектива спринта',
-    description: 'Обсуждение результатов предыдущего спринта и планирование следующего',
-    startTime: new Date(Date.now() + 86400000 * 3), // через 3 дня
-    endTime: new Date(Date.now() + 86400000 * 3 + 5400000), // через 3 дня + 1.5 часа
-    organizer: '1',
-    participants: ['1', '2', '3'],
-    createdAt: new Date(Date.now() - 86400000 * 7),
-    updatedAt: new Date(Date.now() - 86400000 * 2),
-  },
-  {
-    id: '4',
-    title: 'Планирование бюджета',
-    description: 'Планирование бюджета на следующий квартал',
-    startTime: new Date(Date.now() + 86400000 * 7), // через неделю
-    endTime: new Date(Date.now() + 86400000 * 7 + 10800000), // через неделю + 3 часа
-    organizer: '1',
-    participants: ['1', '2'],
-    createdAt: new Date(Date.now() - 86400000 * 14),
-    updatedAt: new Date(Date.now() - 86400000 * 7),
-  },
-];
+import { router } from 'expo-router';
 
 export default function MeetingsScreen() {
   const { user } = useAuth();
+  const { meetings: allMeetings, refreshMeetings } = useMeeting();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [markedDates, setMarkedDates] = useState<any>({});
@@ -68,28 +23,25 @@ export default function MeetingsScreen() {
 
   useEffect(() => {
     loadMeetings();
-  }, []);
+  }, [allMeetings]);
 
   useEffect(() => {
     generateMarkedDates();
   }, [meetings]);
 
   const loadMeetings = () => {
-    // Имитация загрузки данных с сервера
-    setTimeout(() => {
-      // Фильтруем митинги, в которых пользователь участвует
-      const userMeetings = DEMO_MEETINGS.filter(
-        meeting => meeting.participants.includes(user?.id || '')
-      );
-      setMeetings(userMeetings);
-      setLoading(false);
-      setRefreshing(false);
-    }, 1000);
+    // Фильтруем митинги, в которых пользователь участвует
+    const userMeetings = allMeetings.filter(
+      meeting => meeting.participants.includes(user?.id || '')
+    );
+    setMeetings(userMeetings);
+    setLoading(false);
+    setRefreshing(false);
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadMeetings();
+    await refreshMeetings();
   };
 
   const generateMarkedDates = () => {
@@ -321,9 +273,7 @@ export default function MeetingsScreen() {
         <FAB
           icon="plus"
           style={styles.fab}
-          onPress={() => {
-            // Здесь будет открываться экран создания митинга
-          }}
+          onPress={() => router.push('/(tabs)/meetings/create')}
         />
       )}
     </View>
