@@ -1,22 +1,106 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message, ChatRoom, MessageContentType, MessageContent } from '../types';
+import { Message, ChatRoom, MessageContentType, MessageContent, Employee } from '../types';
 import { format } from 'date-fns';
 import { useAuth } from './AuthContext';
 
 // Демо-данные для сотрудников
-export const DEMO_EMPLOYEES = [
-  { id: '1', name: 'Иванов Иван', position: 'Руководитель проекта', avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff' },
-  { id: '2', name: 'Петрова Елена', position: 'Ведущий дизайнер', avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff' },
-  { id: '3', name: 'Сидоров Алексей', position: 'Разработчик', avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff' },
-  { id: '4', name: 'Козлова Мария', position: 'Тестировщик', avatarUrl: 'https://ui-avatars.com/api/?name=Maria+Kozlova&background=6A1B9A&color=fff' },
-  { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
+export const DEMO_EMPLOYEES: Employee[] = [
+  { 
+    id: '1', 
+    name: 'Иванов Иван', 
+    position: 'Руководитель проекта', 
+    department: 'Управление проектами',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff',
+    isOnline: true,
+    completedTasks: 32,
+    activeTasks: 4,
+    projects: 7,
+    email: 'ivan.ivanov@company.com',
+    phone: '+7 (999) 123-45-67',
+    efficiency: '94%',
+    timeliness: '89%'
+  },
+  { 
+    id: '2', 
+    name: 'Петрова Елена', 
+    position: 'Ведущий дизайнер', 
+    department: 'Дизайн',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff',
+    isOnline: true,
+    completedTasks: 27,
+    activeTasks: 3,
+    projects: 5,
+    email: 'elena.petrova@company.com',
+    phone: '+7 (999) 234-56-78',
+    efficiency: '92%',
+    timeliness: '88%'
+  },
+  { 
+    id: '3', 
+    name: 'Сидоров Алексей', 
+    position: 'Разработчик', 
+    department: 'Разработка',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff',
+    isOnline: false,
+    completedTasks: 41,
+    activeTasks: 2,
+    projects: 4,
+    email: 'alexey.sidorov@company.com',
+    phone: '+7 (999) 345-67-89',
+    efficiency: '96%',
+    timeliness: '85%'
+  },
+  { 
+    id: '4', 
+    name: 'Козлова Мария', 
+    position: 'Тестировщик', 
+    department: 'Тестирование',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Maria+Kozlova&background=6A1B9A&color=fff',
+    isOnline: true,
+    completedTasks: 36,
+    activeTasks: 5,
+    projects: 6,
+    email: 'maria.kozlova@company.com',
+    phone: '+7 (999) 456-78-90',
+    efficiency: '90%',
+    timeliness: '93%'
+  },
+  { 
+    id: '5', 
+    name: 'Николаев Дмитрий', 
+    position: 'Бизнес-аналитик', 
+    department: 'Аналитика',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff',
+    isOnline: false,
+    completedTasks: 24,
+    activeTasks: 3,
+    projects: 4,
+    email: 'dmitry.nikolaev@company.com',
+    phone: '+7 (999) 567-89-01',
+    efficiency: '88%',
+    timeliness: '91%'
+  },
 ];
 
 // Функция для получения информации о сотруднике
-export const getEmployeeInfo = (userId: string) => {
+export const getEmployeeInfo = (userId: string): Employee => {
   return DEMO_EMPLOYEES.find(emp => emp.id === userId) || 
-    { id: userId, name: 'Неизвестный пользователь', position: 'Нет данных', avatarUrl: 'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff' };
+    { 
+      id: userId, 
+      name: 'Неизвестный пользователь', 
+      position: 'Нет данных', 
+      department: 'Нет данных',
+      avatarUrl: 'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff',
+      isOnline: false,
+      completedTasks: 0,
+      activeTasks: 0,
+      projects: 0,
+      email: 'unknown@company.com',
+      phone: 'Нет данных',
+      efficiency: '0%',
+      timeliness: '0%'
+    };
 };
 
 // Демо-данные для чатов

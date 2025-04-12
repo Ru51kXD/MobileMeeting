@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Image, TouchableOpacity, Switch, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Image, TouchableOpacity, Switch, useColorScheme, Animated } from 'react-native';
 import { Avatar, Button, Divider, TextInput, Dialog, Portal, useTheme as usePaperTheme } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { UserRole } from '../../types/index';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ThemedContainer } from '@/components/ThemedContainer';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -33,6 +35,15 @@ export default function ProfileScreen() {
 
   // Используем isDark из контекста ThemeContext
   const [darkModeEnabled, setDarkModeEnabled] = useState(isDark);
+
+  // Анимированные значения
+  const [fadeAnims] = useState({
+    header: new Animated.Value(0),
+    profileCard: new Animated.Value(0),
+    statsCard: new Animated.Value(0),
+    projectsCard: new Animated.Value(0),
+    settingsCard: new Animated.Value(0)
+  });
 
   // Обновляем локальное состояние при изменении глобальной темы
   useEffect(() => {
@@ -143,376 +154,660 @@ export default function ProfileScreen() {
     }
   };
 
+  // Анимация появления элементов
+  useEffect(() => {
+    const animations = Object.values(fadeAnims).map((anim, index) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 500,
+        delay: 100 * index,
+        useNativeDriver: true
+      })
+    );
+    
+    Animated.stagger(150, animations).start();
+  }, []);
+
+  if (!user) {
+    return (
+      <ThemedContainer style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
+        <Text style={{color: isDark ? '#ffffff' : '#000000', fontSize: 18}}>
+          Пожалуйста, авторизуйтесь
+        </Text>
+        <TouchableOpacity 
+          style={[styles.button, {marginTop: 20}]} 
+          onPress={() => router.replace('/login')}
+        >
+          <LinearGradient
+            colors={isDark ? ['#0a84ff', '#0066cc'] : ['#007aff', '#0062cc']}
+            style={styles.gradientButton}
+          >
+            <Text style={styles.buttonText}>Войти</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </ThemedContainer>
+    );
+  }
+
   return (
-    <View style={styles.container(isDark)}>
-      <ScrollView>
-        <View style={styles.header(isDark)}>
-          <View style={styles.avatarContainer}>
-            <Avatar.Image
-              source={{ uri: avatarUri }}
-              size={100}
-            />
-            {editMode && (
-              <TouchableOpacity 
-                style={styles.changeAvatarButton}
-                onPress={handleChangeAvatar}
-              >
-                <MaterialCommunityIcons name="camera" size={22} color="white" />
-              </TouchableOpacity>
-            )}
-          </View>
-          
-          {!editMode ? (
-            <View style={styles.userInfo}>
-              <Text style={styles.userName(isDark)}>{userData.name}</Text>
-              <Text style={styles.userRole}>{getRoleText(user?.role || UserRole.ADMIN)}</Text>
-              {userData.position && <Text style={styles.userPosition(isDark)}>{userData.position}</Text>}
-              {userData.department && <Text style={styles.userDepartment(isDark)}>{userData.department}</Text>}
-            </View>
-          ) : (
-            <View style={styles.editForm}>
-              <TextInput
-                label="Имя и фамилия"
-                value={userData.name}
-                onChangeText={(text) => setUserData({ ...userData, name: text })}
-                style={styles.input}
-                mode="outlined"
+    <ThemedContainer style={[styles.container, {backgroundColor: isDark ? '#1c1c1e' : '#f8f8fa'}]}>
+      <Animated.View style={{
+        opacity: fadeAnims.header,
+        transform: [{
+          translateY: fadeAnims.header.interpolate({
+            inputRange: [0, 1],
+            outputRange: [-20, 0]
+          })
+        }]
+      }}>
+        <LinearGradient
+          colors={isDark ? ['#2c2c2e', '#1c1c1e'] : ['#ffffff', '#f8f8fa']}
+          style={styles.header}
+        >
+          <Text style={[styles.headerTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
+            Мой профиль
+          </Text>
+          <TouchableOpacity 
+            style={styles.themeToggle}
+            onPress={toggleTheme}
+          >
+            <LinearGradient
+              colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
+              style={styles.themeToggleGradient}
+            >
+              <FontAwesome 
+                name={isDark ? "moon-o" : "sun-o"} 
+                size={18} 
+                color={isDark ? '#ffffff' : '#000000'} 
               />
-              
-              <TextInput
-                label="Должность"
-                value={userData.position}
-                onChangeText={(text) => setUserData({ ...userData, position: text })}
-                style={styles.input}
-                mode="outlined"
-              />
-              
-              <TextInput
-                label="Отдел"
-                value={userData.department}
-                onChangeText={(text) => setUserData({ ...userData, department: text })}
-                style={styles.input}
-                mode="outlined"
-              />
-            </View>
-          )}
-          
-          <View style={styles.buttonContainer}>
-            {!editMode ? (
-              <Button 
-                mode="contained" 
-                onPress={() => setEditMode(true)}
-                icon="account-edit"
-              >
-                Редактировать профиль
-              </Button>
-            ) : (
-              <View style={styles.editButtons}>
-                <Button 
-                  mode="outlined" 
-                  onPress={() => setEditMode(false)}
-                  style={styles.cancelButton}
+            </LinearGradient>
+          </TouchableOpacity>
+        </LinearGradient>
+      </Animated.View>
+      
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{
+          opacity: fadeAnims.profileCard,
+          transform: [{
+            translateY: fadeAnims.profileCard.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })
+          }]
+        }}>
+          <LinearGradient
+            colors={isDark ? ['#2c2c2e', '#252527'] : ['#ffffff', '#f8f8fa']}
+            style={styles.profileCard}
+          >
+            <View style={styles.profileHeader}>
+              <View style={styles.avatarContainer}>
+                <LinearGradient
+                  colors={isDark ? 
+                    ['rgba(80, 80, 100, 0.6)', 'rgba(40, 40, 60, 0.8)'] : 
+                    ['rgba(240, 240, 250, 0.8)', 'rgba(200, 200, 230, 0.9)']}
+                  style={styles.avatarGradient}
                 >
-                  Отмена
-                </Button>
-                <Button 
-                  mode="contained" 
-                  onPress={handleSaveProfile}
-                >
-                  Сохранить
-                </Button>
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.avatar}
+                  />
+                  <View style={styles.statusBadge} />
+                </LinearGradient>
               </View>
-            )}
-          </View>
-        </View>
+              
+              <View style={styles.profileInfo}>
+                <Text style={[styles.userName, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  {userData.name}
+                </Text>
+                <Text style={[styles.userPosition, {color: isDark ? '#9a9a9a' : '#666666'}]}>
+                  {getRoleText(user?.role || UserRole.ADMIN)}
+                </Text>
+                {userData.position && <Text style={[styles.userPosition, {color: isDark ? '#9a9a9a' : '#666666'}]}>{userData.position}</Text>}
+                {userData.department && <Text style={[styles.userPosition, {color: isDark ? '#9a9a9a' : '#666666'}]}>{userData.department}</Text>}
+              </View>
+            </View>
+            
+            <View style={styles.contactInfo}>
+              <View style={styles.contactItem}>
+                <View style={[styles.contactIcon, {backgroundColor: isDark ? 'rgba(10, 132, 255, 0.15)' : 'rgba(0, 122, 255, 0.15)'}]}>
+                  <FontAwesome name="envelope" size={16} color={isDark ? '#0a84ff' : '#007aff'} />
+                </View>
+                <Text style={[styles.contactText, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  {userData.email}
+                </Text>
+              </View>
+              
+              <View style={styles.contactItem}>
+                <View style={[styles.contactIcon, {backgroundColor: isDark ? 'rgba(10, 132, 255, 0.15)' : 'rgba(0, 122, 255, 0.15)'}]}>
+                  <FontAwesome name="phone" size={16} color={isDark ? '#0a84ff' : '#007aff'} />
+                </View>
+                <Text style={[styles.contactText, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  {user?.phone || '+7 (999) 123-45-67'}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
         
-        <View style={styles.section(isDark)}>
-          <Text style={styles.sectionTitle(isDark)}>Учетная запись</Text>
-          
-          <TouchableOpacity 
-            style={styles.option(isDark)}
-            onPress={handleEmailChange}
+        <Animated.View style={{
+          opacity: fadeAnims.statsCard,
+          transform: [{
+            translateY: fadeAnims.statsCard.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })
+          }]
+        }}>
+          <LinearGradient
+            colors={isDark ? ['#2c2c2e', '#252527'] : ['#ffffff', '#f8f8fa']}
+            style={styles.statsCard}
           >
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="email" size={24} color="#2196F3" />
+            <View style={styles.cardHeader}>
+              <LinearGradient
+                colors={isDark ? ['#ff9500', '#ff6000'] : ['#ff9500', '#ff6000']}
+                style={styles.cardIcon}
+              >
+                <FontAwesome name="tasks" size={16} color="#ffffff" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
+                Рабочая статистика
+              </Text>
             </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Email</Text>
-              <Text style={styles.optionValue(isDark)}>{userData.email}</Text>
+            
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <LinearGradient
+                  colors={isDark ? ['rgba(76, 217, 100, 0.2)', 'rgba(76, 217, 100, 0.1)'] : ['rgba(52, 199, 89, 0.2)', 'rgba(52, 199, 89, 0.1)']}
+                  style={styles.statCircle}
+                >
+                  <Text style={[styles.statValue, {color: isDark ? '#4cd964' : '#34c759'}]}>
+                    85%
+                  </Text>
+                </LinearGradient>
+                <Text style={[styles.statLabel, {color: isDark ? '#9a9a9a' : '#666666'}]}>
+                  Эффективность
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <LinearGradient
+                  colors={isDark ? ['rgba(10, 132, 255, 0.2)', 'rgba(10, 132, 255, 0.1)'] : ['rgba(0, 122, 255, 0.2)', 'rgba(0, 122, 255, 0.1)']}
+                  style={styles.statCircle}
+                >
+                  <Text style={[styles.statValue, {color: isDark ? '#0a84ff' : '#007aff'}]}>
+                    92%
+                  </Text>
+                </LinearGradient>
+                <Text style={[styles.statLabel, {color: isDark ? '#9a9a9a' : '#666666'}]}>
+                  Своевременность
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <LinearGradient
+                  colors={isDark ? ['rgba(255, 149, 0, 0.2)', 'rgba(255, 149, 0, 0.1)'] : ['rgba(255, 149, 0, 0.2)', 'rgba(255, 149, 0, 0.1)']}
+                  style={styles.statCircle}
+                >
+                  <Text style={[styles.statValue, {color: isDark ? '#ff9500' : '#ff9500'}]}>
+                    7
+                  </Text>
+                </LinearGradient>
+                <Text style={[styles.statLabel, {color: isDark ? '#9a9a9a' : '#666666'}]}>
+                  Активные задачи
+                </Text>
+              </View>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.option(isDark)}
-            onPress={() => setPasswordDialogVisible(true)}
-          >
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="lock" size={24} color="#2196F3" />
-            </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Пароль</Text>
-              <Text style={styles.optionValue(isDark)}>Изменить пароль</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
-          </TouchableOpacity>
-        </View>
+          </LinearGradient>
+        </Animated.View>
         
-        <View style={styles.section(isDark)}>
-          <Text style={styles.sectionTitle(isDark)}>Настройки</Text>
-          
-          <View style={styles.option(isDark)}>
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="bell" size={24} color="#2196F3" />
+        <Animated.View style={{
+          opacity: fadeAnims.projectsCard,
+          transform: [{
+            translateY: fadeAnims.projectsCard.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })
+          }]
+        }}>
+          <LinearGradient
+            colors={isDark ? ['#2c2c2e', '#252527'] : ['#ffffff', '#f8f8fa']}
+            style={styles.projectsCard}
+          >
+            <View style={styles.cardHeader}>
+              <LinearGradient
+                colors={isDark ? ['#5e5ce6', '#4b49b7'] : ['#5e5ce6', '#4b49b7']}
+                style={styles.cardIcon}
+              >
+                <FontAwesome name="folder-open" size={16} color="#ffffff" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
+                Проекты
+              </Text>
+              <View style={styles.projectsCount}>
+                <Text style={styles.projectsCountText}>{user?.projects?.length || '4'}</Text>
+              </View>
             </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Уведомления</Text>
-              <Text style={styles.optionValue(isDark)}>Получать push-уведомления</Text>
+            
+            <View style={styles.projectsList}>
+              {user?.projects?.map((project, index) => (
+                <View key={index} style={styles.projectItem}>
+                  <LinearGradient
+                    colors={getProjectGradient(index, isDark)}
+                    style={styles.projectDot}
+                  />
+                  <Text style={[styles.projectName, {color: isDark ? '#ffffff' : '#000000'}]}>
+                    {project.name}
+                  </Text>
+                </View>
+              ))}
             </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-              trackColor={{ false: "#767577", true: "#81b0ff" }}
-              thumbColor={notificationsEnabled ? "#2196F3" : "#f4f3f4"}
-            />
-          </View>
-          
-          <View style={styles.option(isDark)}>
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="calendar-sync" size={24} color="#2196F3" />
-            </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Синхронизация календаря</Text>
-              <Text style={styles.optionValue(isDark)}>Синхронизировать митинги с календарем</Text>
-            </View>
-            <Switch
-              value={calendarSyncEnabled}
-              onValueChange={setCalendarSyncEnabled}
-              trackColor={{ false: "#767577", true: "#81b0ff" }}
-              thumbColor={calendarSyncEnabled ? "#2196F3" : "#f4f3f4"}
-            />
-          </View>
-          
-          <View style={styles.option(isDark)}>
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="theme-light-dark" size={24} color="#2196F3" />
-            </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Темная тема</Text>
-              <Text style={styles.optionValue(isDark)}>Использовать темную тему</Text>
-            </View>
-            <Switch
-              value={darkModeEnabled}
-              onValueChange={handleThemeToggle}
-              trackColor={{ false: "#767577", true: "#81b0ff" }}
-              thumbColor={darkModeEnabled ? "#2196F3" : "#f4f3f4"}
-            />
-          </View>
-        </View>
+          </LinearGradient>
+        </Animated.View>
         
-        <View style={styles.section(isDark)}>
-          <Text style={styles.sectionTitle(isDark)}>Приложение</Text>
-          
-          <TouchableOpacity 
-            style={styles.option(isDark)}
-            onPress={handleAppSettings}
+        <Animated.View style={{
+          opacity: fadeAnims.settingsCard,
+          transform: [{
+            translateY: fadeAnims.settingsCard.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })
+          }]
+        }}>
+          <LinearGradient
+            colors={isDark ? ['#2c2c2e', '#252527'] : ['#ffffff', '#f8f8fa']}
+            style={styles.settingsCard}
           >
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="cog" size={24} color="#2196F3" />
+            <View style={styles.cardHeader}>
+              <LinearGradient
+                colors={isDark ? ['#4cd964', '#30ad4b'] : ['#34c759', '#248a3d']}
+                style={styles.cardIcon}
+              >
+                <FontAwesome name="cog" size={16} color="#ffffff" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
+                Настройки
+              </Text>
             </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Настройки приложения</Text>
-              <Text style={styles.optionValue(isDark)}>Язык, временная зона и другие настройки</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.option(isDark)}
-            onPress={handleHelpSupport}
-          >
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="help-circle" size={24} color="#2196F3" />
-            </View>
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle(isDark)}>Помощь и поддержка</Text>
-              <Text style={styles.optionValue(isDark)}>Справка, обратная связь, сообщить о проблеме</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? "#555" : "#ccc"} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.option(isDark), styles.logoutOption]}
-            onPress={handleLogout}
-          >
-            <View style={styles.optionIconContainer}>
-              <MaterialCommunityIcons name="logout" size={24} color="#F44336" />
-            </View>
-            <View style={styles.optionContent}>
-              <Text style={[styles.optionTitle(isDark), styles.logoutText]}>Выйти из системы</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+            
+            <TouchableOpacity style={styles.settingItem} onPress={toggleTheme}>
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
+                  style={styles.settingIcon}
+                >
+                  <FontAwesome name={isDark ? "moon-o" : "sun-o"} size={16} color={isDark ? '#ffffff' : '#000000'} />
+                </LinearGradient>
+                <Text style={[styles.settingText, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  Переключить тему
+                </Text>
+              </View>
+              <FontAwesome name="angle-right" size={18} color={isDark ? '#9a9a9a' : '#666666'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/account/edit')}>
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
+                  style={styles.settingIcon}
+                >
+                  <FontAwesome name="user-circle" size={16} color={isDark ? '#ffffff' : '#000000'} />
+                </LinearGradient>
+                <Text style={[styles.settingText, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  Редактировать профиль
+                </Text>
+              </View>
+              <FontAwesome name="angle-right" size={18} color={isDark ? '#9a9a9a' : '#666666'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/security')}>
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
+                  style={styles.settingIcon}
+                >
+                  <FontAwesome name="lock" size={16} color={isDark ? '#ffffff' : '#000000'} />
+                </LinearGradient>
+                <Text style={[styles.settingText, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  Безопасность
+                </Text>
+              </View>
+              <FontAwesome name="angle-right" size={18} color={isDark ? '#9a9a9a' : '#666666'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/notifications')}>
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
+                  style={styles.settingIcon}
+                >
+                  <FontAwesome name="bell" size={16} color={isDark ? '#ffffff' : '#000000'} />
+                </LinearGradient>
+                <Text style={[styles.settingText, {color: isDark ? '#ffffff' : '#000000'}]}>
+                  Уведомления
+                </Text>
+              </View>
+              <FontAwesome name="angle-right" size={18} color={isDark ? '#9a9a9a' : '#666666'} />
+            </TouchableOpacity>
+          </LinearGradient>
+        </Animated.View>
         
-        <Portal>
-          <Dialog 
-            visible={passwordDialogVisible}
-            onDismiss={() => setPasswordDialogVisible(false)}
-            style={{ backgroundColor: isDark ? '#1e1e1e' : 'white' }}
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={handleLogout}
+        >
+          <LinearGradient
+            colors={isDark ? ['#ff3b30', '#cc2e26'] : ['#ff3b30', '#cc2e26']}
+            style={styles.gradientButton}
           >
-            <Dialog.Title style={{ color: isDark ? Colors.dark.text : Colors.light.text }}>Изменение пароля</Dialog.Title>
-            <Dialog.Content>
-              <TextInput
-                label="Текущий пароль"
-                value={passwordData.currentPassword}
-                onChangeText={(text) => setPasswordData({...passwordData, currentPassword: text})}
-                secureTextEntry
-                mode="outlined"
-                style={styles.dialogInput}
-              />
-              <TextInput
-                label="Новый пароль"
-                value={passwordData.newPassword}
-                onChangeText={(text) => setPasswordData({...passwordData, newPassword: text})}
-                secureTextEntry
-                mode="outlined"
-                style={styles.dialogInput}
-              />
-              <TextInput
-                label="Подтвердите новый пароль"
-                value={passwordData.confirmPassword}
-                onChangeText={(text) => setPasswordData({...passwordData, confirmPassword: text})}
-                secureTextEntry
-                mode="outlined"
-              />
-            </Dialog.Content>
-            <Dialog.Actions>
-              <Button onPress={() => setPasswordDialogVisible(false)}>Отмена</Button>
-              <Button onPress={handleChangePassword}>Сохранить</Button>
-            </Dialog.Actions>
-          </Dialog>
-        </Portal>
+            <FontAwesome name="sign-out" size={16} color="#ffffff" style={{marginRight: 8}} />
+            <Text style={styles.buttonText}>Выйти</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </ScrollView>
-    </View>
+    </ThemedContainer>
   );
 }
 
-// Преобразуем стили в функциональные, чтобы они могли зависеть от темы
-const styles = {
-  container: (isDark: boolean) => ({
+// Вспомогательная функция для получения градиента для проекта
+const getProjectGradient = (index: number, isDark: boolean) => {
+  const gradients = [
+    isDark ? ['#ff2d55', '#ff2d55cc'] : ['#ff2d55', '#ff2d55cc'],
+    isDark ? ['#5e5ce6', '#5e5ce6cc'] : ['#5e5ce6', '#5e5ce6cc'],
+    isDark ? ['#ff9500', '#ff9500cc'] : ['#ff9500', '#ff9500cc'],
+    isDark ? ['#4cd964', '#4cd964cc'] : ['#34c759', '#34c759cc'],
+  ];
+  return gradients[index % gradients.length];
+};
+
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
-    backgroundColor: isDark ? Colors.dark.background : Colors.light.background,
-  }),
-  header: (isDark: boolean) => ({
-    backgroundColor: isDark ? '#1e1e1e' : 'white',
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? '#333' : '#eee',
-  }),
-  avatarContainer: {
-    marginBottom: 16,
-    position: 'relative',
+    backgroundColor: '#f8f8fa',
   },
-  changeAvatarButton: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  themeToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  themeToggleGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 30,
+  },
+  profileCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarContainer: {
+    marginRight: 16,
+  },
+  avatarGradient: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  avatar: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+  },
+  statusBadge: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#2196F3',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    bottom: 5,
+    right: 5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4cd964',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  userPosition: {
+    fontSize: 16,
+    fontWeight: '400',
+    marginBottom: 8,
+  },
+  departmentBadge: {
+    backgroundColor: 'rgba(100, 100, 250, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  departmentText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#5E5CE6',
+  },
+  contactInfo: {
+    marginTop: 10,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  contactIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  contactText: {
+    fontSize: 15,
+  },
+  statsCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  statLabel: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  projectsCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  projectsCount: {
+    backgroundColor: 'rgba(94, 92, 230, 0.15)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  userInfo: {
+  projectsCountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#5E5CE6',
+  },
+  projectsList: {
+    marginTop: 8,
+  },
+  projectItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  userName: (isDark: boolean) => ({
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 4,
-    color: isDark ? Colors.dark.text : Colors.light.text,
-  }),
-  userRole: {
-    fontSize: 16,
-    color: '#2196F3',
-    marginBottom: 8,
-  },
-  userPosition: (isDark: boolean) => ({
-    fontSize: 14,
-    color: isDark ? '#aaa' : '#666',
-    marginBottom: 4,
-  }),
-  userDepartment: (isDark: boolean) => ({
-    fontSize: 14,
-    color: isDark ? '#aaa' : '#666',
-  }),
-  editForm: {
-    width: '100%',
-    marginBottom: 16,
-  },
-  input: {
     marginBottom: 12,
   },
-  buttonContainer: {
-    width: '100%',
-  },
-  editButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cancelButton: {
+  projectDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     marginRight: 12,
   },
-  section: (isDark: boolean) => ({
-    backgroundColor: isDark ? '#1e1e1e' : 'white',
-    marginBottom: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: isDark ? '#333' : '#eee',
-  }),
-  sectionTitle: (isDark: boolean) => ({
+  projectName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginVertical: 12,
-    color: isDark ? '#ccc' : '#333',
-  }),
-  option: (isDark: boolean) => ({
+  },
+  settingsCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: isDark ? '#333' : '#f5f5f5',
-  }),
-  optionIconContainer: {
-    width: 40,
+    borderBottomColor: 'rgba(142, 142, 147, 0.1)',
+  },
+  settingIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  optionContent: {
-    flex: 1,
-  },
-  optionTitle: (isDark: boolean) => ({
+  settingText: {
     fontSize: 16,
-    marginBottom: 4,
-    color: isDark ? Colors.dark.text : Colors.light.text,
-  }),
-  optionValue: (isDark: boolean) => ({
-    fontSize: 14,
-    color: isDark ? '#aaa' : '#666',
-  }),
-  logoutOption: {
-    borderBottomWidth: 0,
   },
-  logoutText: {
-    color: '#F44336',
+  logoutButton: {
+    marginTop: 8,
+    marginBottom: 20,
+    height: 50,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  dialogInput: {
-    marginBottom: 12,
+  gradientButton: {
+    width: '100%',
+    height: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-}; 
+  button: {
+    height: 46,
+    borderRadius: 12,
+    overflow: 'hidden',
+    width: 200,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+}); 

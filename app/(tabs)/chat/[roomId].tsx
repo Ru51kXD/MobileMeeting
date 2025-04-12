@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,9 @@ import {
   ScrollView,
   Alert,
   Animated,
-  Pressable
+  Pressable,
+  Image,
+  ImageBackground
 } from 'react-native';
 import { Appbar, Avatar, TextInput, IconButton, Menu } from 'react-native-paper';
 import { useChat } from '../../../context/ChatContext';
@@ -32,6 +34,8 @@ import { Icon } from '@/components/Icon';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { VoiceRecorder } from '@/components/chat/VoiceRecorder';
 import { VoiceMessage } from '@/components/chat/VoiceMessage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { FontAwesome } from '@expo/vector-icons';
 
 // Компонент для отображения даты сообщений в чате (с поддержкой темной темы)
 const DateSeparator = ({ date, isDark }: { date: Date, isDark: boolean }) => {
@@ -160,6 +164,33 @@ const TypingIndicator = ({isDark}: {isDark: boolean}) => {
   );
 };
 
+// Функция для получения цвета проекта в зависимости от индекса
+function getProjectColor(index: number, isDark: boolean) {
+  const colors = isDark
+    ? ['#ff2d55', '#ff9500', '#ffcc00', '#4cd964', '#5ac8fa', '#0a84ff', '#5e5ce6', '#bf5af2']
+    : ['#ff2d55', '#ff9500', '#ffcc00', '#34c759', '#5ac8fa', '#007aff', '#5e5ce6', '#af52de'];
+  return colors[index % colors.length];
+}
+
+// Функция для получения более темного оттенка цвета проекта
+function getProjectColorDarker(index: number, isDark: boolean) {
+  const colors = isDark
+    ? ['#cc243f', '#cc7500', '#cc9900', '#39aa4e', '#479dc7', '#0868cc', '#4b49b7', '#9c47c2']
+    : ['#cc243f', '#cc7500', '#cc9900', '#2a9447', '#479dc7', '#0062cc', '#4b49b7', '#8c42b2'];
+  return colors[index % colors.length];
+}
+
+// Функция для улучшенной тени в зависимости от темы
+const getThemeShadow = (isDark: boolean) => {
+  return {
+    shadowColor: isDark ? '#000000' : '#2e2e2e',
+    shadowOffset: { width: 0, height: isDark ? 4 : 2 },
+    shadowOpacity: isDark ? 0.4 : 0.15,
+    shadowRadius: isDark ? 8 : 4,
+    elevation: isDark ? 10 : 5,
+  };
+};
+
 export default function ChatRoomScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const { chatRooms, messages, addMessage, getMessagesForChat, markMessageAsRead } = useChat();
@@ -176,6 +207,10 @@ export default function ChatRoomScreen() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [modalScale] = useState(new Animated.Value(0.8));
+  const [modalOpacity] = useState(new Animated.Value(0));
   
   // Для отслеживания последнего отправленного сообщения
   const lastSentMessageRef = useRef<{text: string, timestamp: number} | null>(null);
@@ -184,6 +219,10 @@ export default function ChatRoomScreen() {
   const flatListRef = useRef<FlatList>(null);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
+  // Добавляем анимированные значения для улучшения UI
+  const headerOpacity = useState(new Animated.Value(0))[0];
+  const listTranslateY = useState(new Animated.Value(20))[0];
+  
   useEffect(() => {
     if (roomId) {
       // Находим информацию о текущей комнате чата
@@ -215,7 +254,21 @@ export default function ChatRoomScreen() {
         }
       }
     }
-  }, [roomId, messages]);
+
+    // Анимация при загрузке экрана
+    Animated.parallel([
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true
+      }),
+      Animated.timing(listTranslateY, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, []);
 
   const handleBackPress = () => {
     router.back();
@@ -314,57 +367,86 @@ export default function ChatRoomScreen() {
     if (!currentChatRoom?.isGroupChat && currentChatRoom) {
       const otherUserId = currentChatRoom.participants.find(id => id !== user?.id) || '';
       const employeeInfo = getEmployeeInfo(otherUserId);
-      setProfileEmployee(employeeInfo);
-      setShowProfile(true);
+      setSelectedEmployeeId(otherUserId);
+      setIsProfileModalVisible(true);
+      Animated.parallel([
+        Animated.timing(modalScale, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true
+        })
+      ]).start();
     }
   };
 
-  // Динамические стили для темной темы
+  const closeModal = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(modalScale, {
+        toValue: 0.8,
+        duration: 250,
+        useNativeDriver: true
+      }),
+      Animated.timing(modalOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true
+      })
+    ]).start(() => {
+      setIsProfileModalVisible(false);
+      setSelectedEmployeeId(null);
+    });
+  }, [modalScale, modalOpacity]);
+
+  // Улучшенные динамические стили
   const dynamicStyles = {
     header: {
-      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
       borderBottomWidth: 0,
-      elevation: isDark ? 0 : 2,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      ...getThemeShadow(isDark),
     },
     headerTitle: {
       color: isDark ? Colors.dark.text : '#333',
+      fontWeight: '700',
     },
     headerSubtitle: {
-      color: isDark ? '#aaa' : '#666',
+      color: isDark ? '#9a9a9a' : '#666',
     },
     messageContainer: {
-      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
     },
     ownMessage: {
-      backgroundColor: isDark ? '#1e476b' : '#e3f2fd',
+      backgroundColor: isDark ? 'rgba(10, 132, 255, 0.25)' : '#e3f2fd',
     },
     otherMessage: {
-      backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+      backgroundColor: isDark ? '#2a2a2c' : '#f5f5f5',
     },
     messageText: {
       color: isDark ? Colors.dark.text : '#333',
     },
     messageTime: {
-      color: isDark ? '#aaa' : '#888',
+      color: isDark ? '#9a9a9a' : '#888',
     },
     senderName: {
-      color: isDark ? '#aaa' : '#666',
+      color: isDark ? '#9a9a9a' : '#666',
     },
     inputContainer: {
-      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
       borderTopColor: isDark ? '#333' : '#e0e0e0',
+      ...getThemeShadow(isDark),
     },
     input: {
-      backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+      backgroundColor: isDark ? '#2a2a2c' : '#f5f5f5',
       color: isDark ? Colors.dark.text : '#333',
     },
     iconButton: {
-      color: isDark ? '#aaa' : '#666',
+      color: isDark ? '#9a9a9a' : '#666',
     },
+    containerBackground: isDark ? '#1c1c1e' : '#f8f8fa',
   };
 
   // Обработчики для отправки файлов и изображений
@@ -739,135 +821,228 @@ export default function ChatRoomScreen() {
     }
   };
 
+  const handleUserPress = useCallback((employeeId) => {
+    setSelectedEmployeeId(employeeId);
+    setIsProfileModalVisible(true);
+    Animated.parallel([
+      Animated.timing(modalScale, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }),
+      Animated.timing(modalOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, [modalScale, modalOpacity]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemedContainer style={styles.container}>
-        <Appbar.Header style={[dynamicStyles.header, styles.appHeader]}>
-          <Appbar.BackAction onPress={handleBackPress} color={isDark ? Colors.dark.text : '#333'} />
-          <TouchableOpacity 
-            style={styles.headerContent}
-            onPress={handleProfilePress}
-            disabled={currentChatRoom?.isGroupChat}
-          >
-            {currentChatRoom?.isGroupChat ? (
-              <Avatar.Icon size={40} icon="account-group" style={styles.groupAvatar} />
-            ) : (
-              <Avatar.Image 
-                size={40} 
-                source={{ 
-                  uri: currentChatRoom ? 
-                    getEmployeeInfo(currentChatRoom.participants.find(id => id !== user?.id) || '').avatarUrl : 
-                    'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff'
-                }} 
-              />
-            )}
-            <View style={styles.headerInfo}>
-              <Text style={[styles.headerTitle, dynamicStyles.headerTitle]} numberOfLines={1}>
-                {currentChatRoom?.isGroupChat 
-                  ? currentChatRoom.name 
-                  : (currentChatRoom 
-                    ? getEmployeeInfo(currentChatRoom.participants.find(id => id !== user?.id) || '').name
-                    : 'Чат')}
-              </Text>
-              {!currentChatRoom?.isGroupChat && currentChatRoom && (
-                <View style={styles.headerStatusContainer}>
-                  <View style={[styles.statusDot, {backgroundColor: '#4CAF50'}]} />
-                  <Text style={[styles.headerSubtitle, dynamicStyles.headerSubtitle]} numberOfLines={1}>
-                    {getEmployeeInfo(currentChatRoom.participants.find(id => id !== user?.id) || '').position}
-                  </Text>
+      <ThemedContainer style={[styles.container, { backgroundColor: dynamicStyles.containerBackground }]}>
+        <Animated.View style={{ opacity: headerOpacity }}>
+          <Appbar.Header style={[dynamicStyles.header, styles.appHeader]}>
+            <Appbar.BackAction onPress={handleBackPress} color={isDark ? Colors.dark.text : Colors.light.text} />
+            <TouchableOpacity 
+              style={styles.headerContent}
+              onPress={handleProfilePress}
+              disabled={currentChatRoom?.isGroupChat}
+            >
+              {currentChatRoom?.isGroupChat ? (
+                <View style={styles.avatarGradientContainer}>
+                  <LinearGradient
+                    colors={isDark ? ['#4F46E5', '#6366F1'] : ['#6366F1', '#818CF8']}
+                    style={styles.avatarGradient}
+                  >
+                    <Avatar.Icon size={40} icon="account-group" style={styles.groupAvatar} />
+                  </LinearGradient>
+                </View>
+              ) : (
+                <View style={styles.avatarGradientContainer}>
+                  <LinearGradient
+                    colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
+                    style={styles.avatarGradient}
+                  >
+                    <Avatar.Image 
+                      size={40} 
+                      source={{ 
+                        uri: currentChatRoom ? 
+                          getEmployeeInfo(currentChatRoom.participants.find(id => id !== user?.id) || '').avatarUrl : 
+                          'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff'
+                      }} 
+                      style={styles.avatar}
+                    />
+                  </LinearGradient>
                 </View>
               )}
-            </View>
-          </TouchableOpacity>
-          
-          <Menu
-            visible={showHeaderMenu}
-            onDismiss={() => setShowHeaderMenu(false)}
-            anchor={
-              <Appbar.Action 
-                icon="dots-vertical" 
-                onPress={() => setShowHeaderMenu(true)} 
-                color={isDark ? Colors.dark.text : '#333'} 
-              />
-            }
-          >
-            <Menu.Item 
-              onPress={() => {
-                setShowHeaderMenu(false);
-                // Очистить чат (просто демо-функция)
-                Alert.alert("Очистка чата", "Эта функция будет доступна в следующих обновлениях");
-              }} 
-              title="Очистить чат" 
-              leadingIcon="trash-can"
-            />
-            <Menu.Item 
-              onPress={() => {
-                setShowHeaderMenu(false);
-                // Поиск в сообщениях (просто демо-функция)
-                Alert.alert("Поиск", "Эта функция будет доступна в следующих обновлениях");
-              }} 
-              title="Поиск" 
-              leadingIcon="magnify"
-            />
-            <Menu.Item 
-              onPress={() => {
-                setShowHeaderMenu(false);
-                // Показать вложения в чате (просто демо-функция)
-                Alert.alert("Вложения", "Эта функция будет доступна в следующих обновлениях");
-              }} 
-              title="Вложения" 
-              leadingIcon="paperclip"
-            />
-          </Menu>
-        </Appbar.Header>
-        
-        <FlatList
-          ref={flatListRef}
-          data={messagesWithDateSeparators()}
-          renderItem={({ item }) => {
-            if ('isDateSeparator' in item) {
-              return <DateSeparator date={item.date} isDark={isDark} />;
-            }
-            
-            const isOwnMessage = item.senderId === user?.id;
-            const senderInfo = getEmployeeInfo(item.senderId);
-            
-            return (
-              <Swipeable
-                ref={(ref) => {
-                  if (ref && !('isDateSeparator' in item)) {
-                    swipeableRefs.current.set(item.id, ref);
-                  }
-                }}
-                renderLeftActions={() => renderLeftActions(item)}
-                overshootLeft={false}
-              >
-                <View style={[
-                  styles.messageContainer,
-                  isOwnMessage 
-                    ? [styles.ownMessageContainer, {backgroundColor: isDark ? '#1e476b' : '#e3f2fd'}]
-                    : [styles.otherMessageContainer, {backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5'}]
-                ]}>
-                  {!isOwnMessage && currentChatRoom?.isGroupChat && (
-                    <Text style={[styles.messageSender, dynamicStyles.senderName]}>
-                      {senderInfo.name}
+              <View style={styles.headerInfo}>
+                <Text style={[styles.headerTitle, dynamicStyles.headerTitle]} numberOfLines={1}>
+                  {currentChatRoom?.isGroupChat 
+                    ? currentChatRoom.name 
+                    : (currentChatRoom 
+                      ? getEmployeeInfo(currentChatRoom.participants.find(id => id !== user?.id) || '').name
+                      : 'Чат')}
+                </Text>
+                {!currentChatRoom?.isGroupChat && currentChatRoom && (
+                  <View style={styles.headerStatusContainer}>
+                    <View style={[styles.statusDot, {
+                      backgroundColor: '#4CAF50',
+                      shadowColor: '#4CAF50',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 4,
+                      elevation: 5,
+                    }]} />
+                    <Text style={[styles.headerSubtitle, dynamicStyles.headerSubtitle]} numberOfLines={1}>
+                      {getEmployeeInfo(currentChatRoom.participants.find(id => id !== user?.id) || '').position}
                     </Text>
-                  )}
-                  
-                  {renderMessageContent(item)}
-                </View>
-              </Swipeable>
-            );
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+            
+            <Menu
+              visible={showHeaderMenu}
+              onDismiss={() => setShowHeaderMenu(false)}
+              anchor={
+                <Appbar.Action 
+                  icon="dots-vertical" 
+                  onPress={() => setShowHeaderMenu(true)} 
+                  color={isDark ? Colors.dark.text : Colors.light.text} 
+                />
+              }
+              contentStyle={{
+                backgroundColor: isDark ? '#2a2a2c' : '#ffffff',
+                borderRadius: 12,
+                ...getThemeShadow(isDark)
+              }}
+            >
+              <Menu.Item 
+                onPress={() => {
+                  setShowHeaderMenu(false);
+                  Alert.alert("Очистка чата", "Эта функция будет доступна в следующих обновлениях");
+                }} 
+                title="Очистить чат" 
+                leadingIcon="trash-can"
+                titleStyle={{ color: isDark ? '#ffffff' : '#000000' }}
+              />
+              <Menu.Item 
+                onPress={() => {
+                  setShowHeaderMenu(false);
+                  Alert.alert("Поиск", "Эта функция будет доступна в следующих обновлениях");
+                }} 
+                title="Поиск" 
+                leadingIcon="magnify"
+                titleStyle={{ color: isDark ? '#ffffff' : '#000000' }}
+              />
+              <Menu.Item 
+                onPress={() => {
+                  setShowHeaderMenu(false);
+                  Alert.alert("Вложения", "Эта функция будет доступна в следующих обновлениях");
+                }} 
+                title="Вложения" 
+                leadingIcon="paperclip"
+                titleStyle={{ color: isDark ? '#ffffff' : '#000000' }}
+              />
+            </Menu>
+          </Appbar.Header>
+        </Animated.View>
+        
+        <Animated.View 
+          style={{ 
+            flex: 1,
+            transform: [{ translateY: listTranslateY }]
           }}
-          keyExtractor={(item) => ('isDateSeparator' in item) ? item.id : item.id}
-          contentContainerStyle={styles.messagesList}
-          onContentSizeChange={() => {
-            if (chatMessages.length > 0) {
-              flatListRef.current?.scrollToEnd({ animated: false });
-            }
-          }}
-          ListFooterComponent={isTyping ? <TypingIndicator isDark={isDark} /> : null}
-        />
+        >
+          <FlatList
+            ref={flatListRef}
+            data={messagesWithDateSeparators()}
+            renderItem={({ item }) => {
+              if ('isDateSeparator' in item) {
+                return <DateSeparator date={item.date} isDark={isDark} />;
+              }
+              
+              const isOwnMessage = item.senderId === user?.id;
+              const senderInfo = getEmployeeInfo(item.senderId);
+              
+              return (
+                <Swipeable
+                  ref={(ref) => {
+                    if (ref && !('isDateSeparator' in item)) {
+                      swipeableRefs.current.set(item.id, ref);
+                    }
+                  }}
+                  renderLeftActions={() => renderLeftActions(item)}
+                  overshootLeft={false}
+                >
+                  <View style={[
+                    styles.messageContainer,
+                    isOwnMessage 
+                      ? [styles.ownMessageContainer, {
+                          backgroundColor: 'transparent',
+                        }]
+                      : [styles.otherMessageContainer, {
+                          backgroundColor: 'transparent',
+                        }]
+                  ]}>
+                    {isOwnMessage ? (
+                      <LinearGradient
+                        colors={isDark 
+                          ? ['rgba(10, 132, 255, 0.25)', 'rgba(10, 132, 255, 0.15)'] 
+                          : ['rgba(0, 122, 255, 0.15)', 'rgba(0, 122, 255, 0.05)']}
+                        style={[styles.messageBubble, styles.ownMessageBubble]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        {!isOwnMessage && currentChatRoom?.isGroupChat && (
+                          <TouchableOpacity 
+                            onPress={() => handleUserPress(item.senderId)}
+                          >
+                            <Text style={[styles.messageSender, {color: isDark ? Colors.dark.tint : Colors.primary}]}>
+                              {senderInfo.name}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        
+                        {renderMessageContent(item)}
+                      </LinearGradient>
+                    ) : (
+                      <LinearGradient
+                        colors={isDark 
+                          ? ['#2a2a2c', '#252527'] 
+                          : ['#f5f5f5', '#e8e8e8']}
+                        style={[styles.messageBubble, styles.otherMessageBubble]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        {!isOwnMessage && currentChatRoom?.isGroupChat && (
+                          <TouchableOpacity 
+                            onPress={() => handleUserPress(item.senderId)}
+                          >
+                            <Text style={[styles.messageSender, {color: isDark ? Colors.dark.tint : Colors.primary}]}>
+                              {senderInfo.name}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        
+                        {renderMessageContent(item)}
+                      </LinearGradient>
+                    )}
+                  </View>
+                </Swipeable>
+              );
+            }}
+            keyExtractor={(item) => ('isDateSeparator' in item) ? item.id : item.id}
+            contentContainerStyle={styles.messagesList}
+            onContentSizeChange={() => {
+              if (chatMessages.length > 0) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
+            ListFooterComponent={isTyping ? <TypingIndicator isDark={isDark} /> : null}
+          />
+        </Animated.View>
         
         {/* Отображение ответа на сообщение */}
         {replyingTo && (
@@ -877,7 +1052,10 @@ export default function ChatRoomScreen() {
             borderBottomColor: isDark ? '#333' : '#ddd',
           }]}>
             <View style={styles.replyContent}>
-              <View style={[styles.replyLine, {backgroundColor: '#2196F3'}]} />
+              <LinearGradient
+                colors={['#2196F3', '#1E88E5']}
+                style={styles.replyLine}
+              />
               <View style={styles.replyTextContainer}>
                 <Text style={[styles.replyToText, {color: '#2196F3'}]}>
                   Ответ на сообщение от {getEmployeeInfo(replyingTo.senderId).name}
@@ -909,7 +1087,12 @@ export default function ChatRoomScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
           >
-            <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
+            <LinearGradient
+              colors={isDark 
+                ? ['#1c1c1e', '#1c1c1e'] 
+                : ['#ffffff', '#f8f8fa']}
+              style={[styles.inputContainer, dynamicStyles.inputContainer]}
+            >
               {/* Кнопка для открытия меню вложений */}
               <TouchableOpacity
                 style={[styles.inputIconButton, showAttachmentMenu && styles.inputIconButtonActive]}
@@ -962,7 +1145,6 @@ export default function ChatRoomScreen() {
                 style={[
                   styles.sendButton, 
                   {
-                    backgroundColor: newMessage.trim() ? '#2196F3' : isDark ? '#333' : '#e0e0e0',
                     opacity: isSending ? 0.5 : 1
                   }
                 ]}
@@ -970,15 +1152,21 @@ export default function ChatRoomScreen() {
                 disabled={!newMessage.trim() || isSending}
                 activeOpacity={0.7}
               >
-                <Icon name="send" size={20} color="#fff" />
+                <LinearGradient
+                  colors={newMessage.trim() ? ['#2196F3', '#1E88E5'] : [isDark ? '#333' : '#e0e0e0', isDark ? '#222' : '#d0d0d0']}
+                  style={styles.sendButtonGradient}
+                >
+                  <Icon name="send" size={20} color="#fff" />
+                </LinearGradient>
               </TouchableOpacity>
-            </View>
+            </LinearGradient>
             
             {/* Меню вложений */}
             {showAttachmentMenu && (
               <View style={[styles.attachmentMenu, {
-                backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
-                borderTopColor: isDark ? '#333' : '#e0e0e0'
+                backgroundColor: isDark ? '#2a2a2c' : '#f5f5f5',
+                borderTopColor: isDark ? '#333' : '#e0e0e0',
+                ...getThemeShadow(isDark)
               }]}>
                 <TouchableOpacity 
                   style={styles.attachmentOption} 
@@ -987,8 +1175,13 @@ export default function ChatRoomScreen() {
                     toggleAttachmentMenu();
                   }}
                 >
-                  <IconButton icon="image" size={24} color="#2196F3" />
-                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Изображение</Text>
+                  <LinearGradient
+                    colors={['#2196F3', '#1E88E5']}
+                    style={styles.attachmentIconGradient}
+                  >
+                    <IconButton icon="image" size={24} color="#ffffff" />
+                  </LinearGradient>
+                  <Text style={{ color: isDark ? '#fff' : '#333', marginTop: 4 }}>Изображение</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -998,8 +1191,13 @@ export default function ChatRoomScreen() {
                     toggleAttachmentMenu();
                   }}
                 >
-                  <IconButton icon="file-document" size={24} color="#4CAF50" />
-                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Файл</Text>
+                  <LinearGradient
+                    colors={['#4CAF50', '#43A047']}
+                    style={styles.attachmentIconGradient}
+                  >
+                    <IconButton icon="file-document" size={24} color="#ffffff" />
+                  </LinearGradient>
+                  <Text style={{ color: isDark ? '#fff' : '#333', marginTop: 4 }}>Файл</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
@@ -1009,8 +1207,13 @@ export default function ChatRoomScreen() {
                     toggleAttachmentMenu();
                   }}
                 >
-                  <IconButton icon="emoticon-excited" size={24} color="#FFC107" />
-                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Эмодзи</Text>
+                  <LinearGradient
+                    colors={['#FFC107', '#FFB300']}
+                    style={styles.attachmentIconGradient}
+                  >
+                    <IconButton icon="emoticon-excited" size={24} color="#ffffff" />
+                  </LinearGradient>
+                  <Text style={{ color: isDark ? '#fff' : '#333', marginTop: 4 }}>Эмодзи</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -1020,8 +1223,13 @@ export default function ChatRoomScreen() {
                     toggleAttachmentMenu();
                   }}
                 >
-                  <IconButton icon="microphone" size={24} color="#9C27B0" />
-                  <Text style={{ color: isDark ? '#fff' : '#333' }}>Голосовое</Text>
+                  <LinearGradient
+                    colors={['#9C27B0', '#8E24AA']}
+                    style={styles.attachmentIconGradient}
+                  >
+                    <IconButton icon="microphone" size={24} color="#ffffff" />
+                  </LinearGradient>
+                  <Text style={{ color: isDark ? '#fff' : '#333', marginTop: 4 }}>Голосовое</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1029,200 +1237,248 @@ export default function ChatRoomScreen() {
         )}
         
         {/* Модальное окно профиля сотрудника */}
-        <Modal
-          visible={showProfile}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowProfile(false)}
-        >
-          <View style={[styles.modalContainer, {backgroundColor: isDark ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.5)'}]}>
-            <View style={[styles.profileContainer, {backgroundColor: isDark ? '#1e1e1e' : '#ffffff'}]}>
-              <Appbar.Header style={[styles.profileHeader, {backgroundColor: isDark ? '#1e1e1e' : '#ffffff'}]}>
-                <Appbar.BackAction onPress={() => setShowProfile(false)} color={isDark ? Colors.dark.text : '#333'} />
-                <Appbar.Content title="Профиль сотрудника" color={isDark ? Colors.dark.text : '#333'} />
-                <Appbar.Action icon="dots-vertical" onPress={() => {}} color={isDark ? Colors.dark.text : '#333'} />
-              </Appbar.Header>
-              
-              <ScrollView contentContainerStyle={styles.profileContent}>
-                <View style={styles.profileImageContainer}>
-                  <Avatar.Image 
-                    size={120} 
-                    source={{ uri: profileEmployee?.avatarUrl }}
-                    style={styles.profileImage}
-                  />
-                  <View style={updateStatusBadgeStyle()}>
-                    <View style={[styles.statusDot, {backgroundColor: '#4CAF50'}]} />
-                  </View>
-                </View>
-                
-                <Text style={[styles.profileName, {color: isDark ? Colors.dark.text : '#333'}]}>
-                  {profileEmployee?.name}
-                </Text>
-                
-                <Text style={[styles.profilePosition, {color: isDark ? '#aaa' : '#666'}]}>
-                  {profileEmployee?.position}
-                </Text>
-                
-                <View style={updateDepartmentBadgeStyle()}>
-                  <Icon name="briefcase" size={14} color={isDark ? '#fff' : '#333'} style={{marginRight: 4}} />
-                  <Text style={[styles.profileDepartment, {color: isDark ? '#fff' : '#333'}]}>
-                    {profileEmployee?.department || 'ИТ отдел'}
-                  </Text>
-                </View>
-                
-                <View style={[styles.statsContainer, {backgroundColor: isDark ? '#2a2a2a' : '#f8f8f8', borderRadius: 12}]}>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statValue, {color: isDark ? Colors.dark.text : '#333'}]}>24</Text>
-                    <Text style={[styles.statLabel, {color: isDark ? '#aaa' : '#888'}]}>Задачи</Text>
-                  </View>
-                  <View style={[styles.statDivider, {backgroundColor: isDark ? '#333' : '#eee'}]} />
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statValue, {color: isDark ? Colors.dark.text : '#333'}]}>12</Text>
-                    <Text style={[styles.statLabel, {color: isDark ? '#aaa' : '#888'}]}>Проекты</Text>
-                  </View>
-                  <View style={[styles.statDivider, {backgroundColor: isDark ? '#333' : '#eee'}]} />
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statValue, {color: isDark ? Colors.dark.text : '#333'}]}>98%</Text>
-                    <Text style={[styles.statLabel, {color: isDark ? '#aaa' : '#888'}]}>Рейтинг</Text>
-                  </View>
-                </View>
-                
-                <View style={[styles.sectionHeader, {borderBottomColor: isDark ? '#333' : '#eee'}]}>
-                  <Icon name="user" size={16} color={isDark ? Colors.primary : Colors.primary} style={{marginRight: 8}} />
-                  <Text style={[styles.sectionHeaderText, {color: isDark ? Colors.dark.text : '#333'}]}>
-                    Личная информация
-                  </Text>
-                </View>
-                
-                <View style={[styles.infoCard, {backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5'}]}>
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="mail" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Email:</Text>
+        {isProfileModalVisible && selectedEmployee && (
+          <Pressable 
+            style={styles.modalBackdrop} 
+            onPress={closeModal}
+          >
+            <Animated.View 
+              style={[
+                styles.modalContainer,
+                {
+                  opacity: modalOpacity,
+                  transform: [{ scale: modalScale }],
+                  backgroundColor: isDark ? 'rgba(30, 30, 32, 0.95)' : 'rgba(250, 250, 252, 0.95)'
+                }
+              ]}
+            >
+              <Pressable style={{ flex: 1 }} onPress={(e) => e.stopPropagation()}>
+                <ScrollView 
+                  style={styles.profileContainer} 
+                  contentContainerStyle={{ paddingBottom: 30 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.profileHeader}>
+                    <View style={styles.avatarContainer}>
+                      <LinearGradient
+                        colors={isDark ? 
+                          ['rgba(80, 80, 100, 0.6)', 'rgba(40, 40, 60, 0.8)'] : 
+                          ['rgba(240, 240, 250, 0.8)', 'rgba(200, 200, 230, 0.9)']}
+                        style={styles.avatarBackground}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Image
+                          source={{ uri: selectedEmployee.avatarUrl }}
+                          style={styles.avatarImage}
+                        />
+                        <View 
+                          style={[
+                            styles.onlineIndicator, 
+                            { backgroundColor: selectedEmployee.isOnline ? '#34C759' : '#888' }
+                          ]} 
+                        />
+                      </LinearGradient>
                     </View>
-                    <View style={styles.infoValueContainer}>
-                      <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                        {profileEmployee?.email || 'example@company.com'}
+                    <View style={styles.profileNameContainer}>
+                      <Text style={[
+                        styles.profileName, 
+                        { color: isDark ? '#fff' : '#000',
+                          textShadowColor: isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.2)',
+                          textShadowOffset: { width: 0, height: 1 },
+                          textShadowRadius: 2 
+                        }
+                      ]}>
+                        {selectedEmployee.name}
                       </Text>
-                      <TouchableOpacity style={styles.copyButton}>
-                        <Icon name="copy" size={16} color="#2196F3" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="phone" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Телефон:</Text>
-                    </View>
-                    <View style={styles.infoValueContainer}>
-                      <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                        {profileEmployee?.phone || '+7 (XXX) XXX-XX-XX'}
+                      <Text style={[
+                        styles.profilePosition, 
+                        { color: isDark ? '#ccc' : '#444' }
+                      ]}>
+                        {selectedEmployee.position}
                       </Text>
-                      <TouchableOpacity style={styles.copyButton}>
-                        <Icon name="copy" size={16} color="#2196F3" />
-                      </TouchableOpacity>
+                      <View style={styles.departmentBadge}>
+                        <Text style={styles.departmentText}>
+                          {selectedEmployee.department}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                   
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="map-pin" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Локация:</Text>
+                  <View style={[styles.sectionCard, { marginTop: 24 }]}>
+                    <View style={styles.cardHeader}>
+                      <FontAwesome 
+                        name="address-card" 
+                        size={18} 
+                        color={isDark ? '#BBA8FF' : '#6C47FF'} 
+                      />
+                      <Text style={[styles.cardHeaderText, { color: isDark ? '#eee' : '#333' }]}>
+                        Контактная информация
+                      </Text>
                     </View>
-                    <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                      {profileEmployee?.location || 'Москва, Главный офис'}
-                    </Text>
+                    <View style={styles.contactInfo}>
+                      <View style={styles.contactItem}>
+                        <FontAwesome name="envelope" size={16} color={isDark ? '#aaa' : '#555'} />
+                        <Text style={[styles.contactText, { color: isDark ? '#ddd' : '#333' }]}>
+                          {selectedEmployee.email}
+                        </Text>
+                      </View>
+                      <View style={styles.contactItem}>
+                        <FontAwesome name="phone" size={16} color={isDark ? '#aaa' : '#555'} />
+                        <Text style={[styles.contactText, { color: isDark ? '#ddd' : '#333' }]}>
+                          {selectedEmployee.phone}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                   
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="clock" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Часовой пояс:</Text>
+                  <View style={styles.sectionCard}>
+                    <View style={styles.cardHeader}>
+                      <FontAwesome 
+                        name="tasks" 
+                        size={18} 
+                        color={isDark ? '#FFAA8A' : '#FF7846'} 
+                      />
+                      <Text style={[styles.cardHeaderText, { color: isDark ? '#eee' : '#333' }]}>
+                        Задачи
+                      </Text>
                     </View>
-                    <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                      {profileEmployee?.timezone || 'GMT+3 (Москва)'}
-                    </Text>
+                    <View style={styles.statsSection}>
+                      <View style={styles.taskCircle}>
+                        <Text style={styles.taskNumber}>{selectedEmployee.activeTasks}</Text>
+                        <Text style={styles.taskLabel}>Активные</Text>
+                      </View>
+                      <View style={styles.taskCircle}>
+                        <Text style={styles.taskNumber}>{selectedEmployee.completedTasks}</Text>
+                        <Text style={styles.taskLabel}>Завершенные</Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
+                  
+                  <View style={styles.sectionCard}>
+                    <View style={styles.cardHeader}>
+                      <FontAwesome 
+                        name="pie-chart" 
+                        size={18} 
+                        color={isDark ? '#A8E0FF' : '#0A84FF'} 
+                      />
+                      <Text style={[styles.cardHeaderText, { color: isDark ? '#eee' : '#333' }]}>
+                        Статистика работы
+                      </Text>
+                    </View>
+                    <View style={styles.statsGrid}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{selectedEmployee.efficiency}%</Text>
+                        <Text style={styles.statLabel}>Эффективность</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{selectedEmployee.timeliness}%</Text>
+                        <Text style={styles.statLabel}>Своевременность</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.sectionCard}>
+                    <View style={styles.cardHeader}>
+                      <FontAwesome 
+                        name="folder-open" 
+                        size={18} 
+                        color={isDark ? '#A8FFB0' : '#30D158'} 
+                      />
+                      <Text style={[styles.cardHeaderText, { color: isDark ? '#eee' : '#333' }]}>
+                        Проекты
+                      </Text>
+                      <View style={styles.projectCount}>
+                        <Text style={styles.projectCountText}>{selectedEmployee.projects.length}</Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.projectsContainer}>
+                      {selectedEmployee.projects.map((project, index) => (
+                        <View
+                          key={index}
+                          style={[
+                            styles.projectChip,
+                            {
+                              backgroundColor: getProjectColor(index, isDark),
+                              shadowColor: getProjectColorDarker(index, isDark),
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.5,
+                              shadowRadius: 3,
+                              elevation: 3
+                            }
+                          ]}
+                        >
+                          <Text style={styles.projectChipText}>{project}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                  
+                  <View style={styles.actionButtonsContainer}>
+                    <Pressable 
+                      onPress={() => {
+                        closeModal();
+                        router.push(`/chat/${selectedEmployee.id}`);
+                      }}
+                    >
+                      <LinearGradient
+                        colors={isDark ? 
+                          ['#4F46E5', '#7B6FFF'] : 
+                          ['#5E5CE6', '#7B6FFF']}
+                        style={[styles.actionButton, {
+                          shadowColor: '#4338CA',
+                          shadowOffset: { width: 0, height: 3 },
+                          shadowOpacity: 0.4,
+                          shadowRadius: 4,
+                          elevation: 5
+                        }]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <FontAwesome name="comment" size={16} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.actionButtonText}>Написать сообщение</Text>
+                      </LinearGradient>
+                    </Pressable>
+                    
+                    <Pressable 
+                      onPress={() => {
+                        closeModal();
+                        router.push('/tasks/new');
+                      }}
+                      style={{ marginTop: 12 }}
+                    >
+                      <LinearGradient
+                        colors={isDark ? 
+                          ['#4c6ceb', '#6c8aff'] : 
+                          ['#5a7bff', '#7a96ff']}
+                        style={[styles.actionButton, {
+                          shadowColor: '#3e58bd',
+                          shadowOffset: { width: 0, height: 3 },
+                          shadowOpacity: 0.4,
+                          shadowRadius: 4,
+                          elevation: 5
+                        }]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <FontAwesome name="tasks" size={16} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.actionButtonText}>Назначить задачу</Text>
+                      </LinearGradient>
+                    </Pressable>
+                  </View>
+                </ScrollView>
                 
-                <View style={[styles.sectionHeader, {borderBottomColor: isDark ? '#333' : '#eee'}]}>
-                  <Icon name="bar-chart" size={16} color={isDark ? Colors.primary : Colors.primary} style={{marginRight: 8}} />
-                  <Text style={[styles.sectionHeaderText, {color: isDark ? Colors.dark.text : '#333'}]}>
-                    Рабочая информация
-                  </Text>
-                </View>
-                
-                <View style={[styles.infoCard, {backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5'}]}>
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="briefcase" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Должность:</Text>
-                    </View>
-                    <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                      {profileEmployee?.position || 'Разработчик'}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="calendar" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Дата найма:</Text>
-                    </View>
-                    <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                      {profileEmployee?.hireDate || '01.01.2020'}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="users" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Команда:</Text>
-                    </View>
-                    <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                      {profileEmployee?.team || 'Команда разработки'}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.infoRow}>
-                    <View style={styles.infoLabelContainer}>
-                      <Icon name="user-check" size={16} color={isDark ? '#aaa' : '#666'} style={{marginRight: 8}} />
-                      <Text style={[styles.infoLabel, {color: isDark ? '#aaa' : '#666'}]}>Руководитель:</Text>
-                    </View>
-                    <Text style={[styles.infoValue, {color: isDark ? Colors.dark.text : '#333'}]}>
-                      {profileEmployee?.manager || 'Иванов И.И.'}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.actionButtonsContainer}>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, {backgroundColor: isDark ? '#1e476b' : '#e3f2fd'}]}
-                    onPress={() => {
-                      setShowProfile(false);
-                      // Здесь можно добавить переход к списку задач сотрудника
-                    }}
-                  >
-                    <Icon name="list" size={16} color={isDark ? Colors.dark.text : '#2196F3'} style={{marginRight: 8}} />
-                    <Text style={[styles.actionButtonText, {color: isDark ? Colors.dark.text : '#2196F3'}]}>
-                      Просмотр задач
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.messageButton, {backgroundColor: '#2196F3', marginTop: 8}]}
-                    onPress={() => setShowProfile(false)}
-                  >
-                    <Icon name="message-circle" size={16} color="#fff" style={{marginRight: 8}} />
-                    <Text style={[styles.actionButtonText, {color: '#fff'}]}>
-                      Вернуться к чату
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
+                <Pressable 
+                  onPress={closeModal} 
+                  style={styles.closeButton}
+                >
+                  <FontAwesome name="times" size={22} color={isDark ? '#ccc' : '#555'} />
+                </Pressable>
+              </Pressable>
+            </Animated.View>
+          </Pressable>
+        )}
       </ThemedContainer>
     </GestureHandlerRootView>
   );
@@ -1234,121 +1490,167 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   appHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomWidth: 0,
     elevation: 0,
+    shadowOpacity: 0,
   },
   header: {
     backgroundColor: '#fff',
-    elevation: 1,
+    elevation: 0,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerInfo: {
+    flexDirection: 'column',
+    marginLeft: 12,
+    flex: 1,
+  },
+  headerStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#666',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   groupAvatar: {
-    backgroundColor: '#2196F3',
-    marginRight: 8,
-    marginLeft: 4,
+    backgroundColor: 'transparent',
+    marginRight: 0,
+    marginLeft: 0,
+  },
+  avatar: {
+    borderRadius: 20,
+  },
+  avatarGradientContainer: {
+    borderRadius: 22,
+    padding: 2,
+    overflow: 'hidden',
+  },
+  avatarGradient: {
+    borderRadius: 20,
+    padding: 0,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messagesList: {
-    padding: 12,
+    padding: 16,
     paddingBottom: 16,
   },
   messageContainer: {
     flexDirection: 'column',
-    marginVertical: 6,
-    maxWidth: '85%',
+    marginVertical: 4,
+    maxWidth: '80%',
+  },
+  messageBubble: {
     borderRadius: 20,
-    padding: 16,
-    paddingBottom: 10,
+    padding: 12,
+    paddingVertical: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    elevation: 0.5,
+  },
+  ownMessageBubble: {
+    borderBottomRightRadius: 4,
+  },
+  otherMessageBubble: {
+    borderBottomLeftRadius: 4,
   },
   ownMessageContainer: {
     alignSelf: 'flex-end',
     marginLeft: 'auto',
-    borderBottomRightRadius: 8,
   },
   otherMessageContainer: {
     alignSelf: 'flex-start',
     marginRight: 'auto',
-    borderBottomLeftRadius: 8,
   },
   messageAvatar: {
     marginRight: 8,
     alignSelf: 'flex-end',
   },
-  messageBubble: {
-    padding: 12,
-    borderRadius: 18,
-    minWidth: 80,
-  },
   messageSender: {
     fontSize: 13,
-    fontWeight: 'bold',
-    color: '#2196F3',
-    marginBottom: 6,
+    fontWeight: '600',
+    marginBottom: 3,
+    letterSpacing: 0.1,
   },
   messageTextContainer: {
-    marginVertical: 4,
+    marginVertical: 2,
   },
   messageText: {
-    fontSize: 17,
-    color: '#333',
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 22,
     letterSpacing: 0.2,
   },
   messageTime: {
     fontSize: 11,
     color: '#999',
     alignSelf: 'flex-end',
-    marginTop: 6,
+    marginTop: 3,
+    marginRight: 2,
   },
   inputContainer: {
-    padding: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+    paddingVertical: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E5E5E5',
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
   input: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: 20,
     maxHeight: 120,
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 36,
+    paddingHorizontal: 16,
     fontSize: 16,
     marginHorizontal: 8,
+    paddingTop: 8,
   },
   inputIconButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
   },
   inputIconButtonActive: {
-    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2196F3',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  sendButtonGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   dateSeparator: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 20,
   },
   dateSeparatorLine: {
     flex: 1,
@@ -1356,247 +1658,225 @@ const styles = StyleSheet.create({
   },
   dateSeparatorText: {
     fontSize: 12,
-    color: '#999',
-    backgroundColor: '#f0f0f0',
+    color: '#8E8E93',
+    backgroundColor: '#F2F2F7',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderRadius: 12,
     overflow: 'hidden',
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerInfo: {
-    flexDirection: 'column',
-    marginLeft: 8,
-  },
-  headerStatusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  modalContainer: {
-    flex: 1,
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 1000,
+  },
+  modalContainer: {
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '85%',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   profileContainer: {
-    width: '90%',
-    maxHeight: '90%',
+    padding: 24,
     borderRadius: 16,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
   profileHeader: {
-    elevation: 0,
-    backgroundColor: '#fff',
-  },
-  profileContent: {
-    padding: 16,
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  profileImageContainer: {
-    marginVertical: 16,
-    position: 'relative',
+  avatarContainer: {
+    marginRight: 16,
+  },
+  avatarBackground: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 10,
   },
-  profileImage: {
-    backgroundColor: '#e0e0e0',
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
   },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  profileNameContainer: {
+    flex: 1,
   },
   profileName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 8,
-    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   profilePosition: {
     fontSize: 16,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
+    fontWeight: '400',
+    marginBottom: 8,
   },
-  profileDepartment: {
+  departmentBadge: {
+    backgroundColor: 'rgba(100, 100, 250, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  departmentText: {
     fontSize: 14,
     fontWeight: '500',
+    color: '#5E5CE6',
   },
-  statsContainer: {
+  sectionCard: {
+    backgroundColor: 'rgba(150, 150, 150, 0.08)',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  cardHeader: {
     flexDirection: 'row',
-    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardHeaderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+    flex: 1,
+  },
+  contactInfo: {
+    marginTop: 8,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  contactText: {
+    fontSize: 15,
+    marginLeft: 12,
+  },
+  statsSection: {
+    flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 16,
-    paddingVertical: 16,
+    marginTop: 4,
+  },
+  taskCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 130, 50, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF8250',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  taskNumber: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FF8250',
+  },
+  taskLabel: {
+    fontSize: 13,
+    color: '#FF8250',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
   statItem: {
     alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0A84FF',
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 14,
+    color: '#0A84FF',
+    opacity: 0.8,
   },
-  statDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: '#eee',
-  },
-  sectionHeader: {
+  projectsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 12,
-    marginBottom: 8,
-    borderBottomWidth: 1,
+    flexWrap: 'wrap',
+    marginTop: 8,
   },
-  sectionHeaderText: {
-    fontSize: 16,
+  projectChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  projectChipText: {
+    color: 'white',
+    fontSize: 14,
     fontWeight: '600',
   },
-  infoCard: {
-    width: '100%',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  infoRow: {
-    marginBottom: 16,
-  },
-  infoLabelContainer: {
-    flexDirection: 'row',
+  projectCount: {
+    backgroundColor: 'rgba(30, 200, 30, 0.2)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginLeft: 8,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  infoValueContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  infoValue: {
-    fontSize: 16,
-    color: '#333',
-  },
-  copyButton: {
-    padding: 4,
+  projectCountText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#30D158',
   },
   actionButtonsContainer: {
-    width: '100%',
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: 24,
   },
   actionButton: {
-    width: '100%',
-    padding: 12,
-    borderRadius: 8,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  messageButton: {
-    borderWidth: 0,
+    paddingVertical: 14,
+    borderRadius: 12,
   },
   actionButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: '500',
   },
-  attachmentMenu: {
-    flexDirection: 'row',
-    padding: 16,
-    borderTopWidth: 1,
-    justifyContent: 'space-around',
-    borderTopColor: '#eee',
-  },
-  attachmentOption: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: 'rgba(33, 150, 243, 0.1)',
-    marginHorizontal: 6,
-  },
-  typingContainer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  typingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  swipeActionContainer: {
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(120, 120, 120, 0.15)',
     justifyContent: 'center',
-    marginVertical: 6,
-  },
-  swipeAction: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  swipeActionText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontWeight: '600',
-  },
-  replyContainer: {
-    flexDirection: 'row',
-    padding: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  replyContent: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  replyLine: {
-    width: 4,
-    borderRadius: 2,
-    marginRight: 8,
-  },
-  replyTextContainer: {
-    flex: 1,
-  },
-  replyToText: {
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  replyText: {
-    fontSize: 14,
+    zIndex: 1100,
   },
   emojiContainer: {
     justifyContent: 'center',
@@ -1607,4 +1887,25 @@ const styles = StyleSheet.create({
     fontSize: 50,
     lineHeight: 60,
   },
-}); 
+  attachmentMenu: {
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  attachmentOption: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentIconGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  }
+});

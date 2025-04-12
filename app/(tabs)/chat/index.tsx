@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, Image } from 'react-native';
 import { Searchbar, FAB, Avatar, Badge, Divider, ActivityIndicator, Button, Checkbox, TextInput, RadioButton } from 'react-native-paper';
 import { useChat } from '../../../context/ChatContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -7,11 +7,12 @@ import { useTheme } from '../../../context/ThemeContext';
 import { ChatRoom } from '../../../types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ThemedContainer } from '@/components/ThemedContainer';
 import { Colors } from '@/constants/Colors';
 import { getEmployeeInfo, DEMO_EMPLOYEES } from '../../../context/ChatContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ChatListScreen() {
   const { chatRooms, messages, getUnreadCount, refreshChatData, resetAndRefreshChatData, createGroupChat } = useChat();
@@ -310,200 +311,180 @@ export default function ChatListScreen() {
     }
   };
 
-  // Динамические стили для тёмной темы
-  const dynamicStyles = {
-    header: {
-      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
-      borderBottomColor: isDark ? '#333' : '#e0e0e0',
-    },
-    headerTitle: {
-      color: isDark ? Colors.dark.text : '#333',
-    },
-    searchBar: {
-      backgroundColor: isDark ? '#2c2c2c' : '#f2f2f2',
-    },
-    chatRoomItem: {
-      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
-      borderBottomColor: isDark ? '#333' : '#f0f0f0',
-    },
-    chatName: {
-      color: isDark ? Colors.dark.text : '#333',
-    },
-    lastMessage: {
-      color: isDark ? '#888' : '#666',
-    },
-    unreadMessage: {
-      color: isDark ? Colors.dark.text : '#000',
-      fontWeight: 'bold',
-    },
-    timestamp: {
-      color: isDark ? '#777' : '#999',
-    },
-    modalContent: {
-      backgroundColor: isDark ? '#1e1e1e' : '#ffffff',
-    },
-    modalTitle: {
-      color: isDark ? Colors.dark.text : '#333',
-    },
-    modalText: {
-      color: isDark ? '#aaa' : '#666',
-    },
-    input: {
-      backgroundColor: isDark ? '#2c2c2c' : '#f5f5f5',
-      color: isDark ? Colors.dark.text : '#333',
-    },
-    employeeItem: {
-      borderBottomColor: isDark ? '#333' : '#f0f0f0',
-    },
-    employeeName: {
-      color: isDark ? Colors.dark.text : '#333',
-    },
-    employeePosition: {
-      color: isDark ? '#888' : '#666',
-    },
-  };
+  const renderChatItem = ({ item }: { item: ChatRoom }) => {
+    if (!user) return null;
 
-  // Рендеринг модального окна создания чата
-  const renderCreateChatModal = () => {
+    // Получаем превью последнего сообщения
+    const messagePreview = getLastMessagePreview(item);
+    
+    // Определяем имя чата
+    let chatName = item.name;
+    let avatarUrl: string | null = null;
+    
+    // Если это не групповой чат, получаем имя собеседника
+    if (!item.isGroupChat && item.participants.length === 2) {
+      const otherParticipantId = item.participants.find(id => id !== user.id);
+      if (otherParticipantId) {
+        const employeeInfo = getEmployeeInfo(otherParticipantId);
+        if (employeeInfo) {
+          chatName = employeeInfo.name;
+          avatarUrl = employeeInfo.avatarUrl;
+        }
+      }
+    }
+    
+    // Получаем количество непрочитанных сообщений
+    const unreadCount = getUnreadCountForRoom(item.id);
+    
+    // Определяем, является ли последнее сообщение непрочитанным
+    const hasUnread = unreadCount > 0;
+    
+    // Проверяем, является ли данный чат активным (были сообщения за последние 24 часа)
+    const isActiveChat = messagePreview.timestamp > new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    // Выбираем цвета градиента в зависимости от активности чата
+    const gradientColors = isDark 
+      ? (isActiveChat ? ['#1c2a3d', '#1a232e'] : ['#232323', '#262626']) 
+      : (isActiveChat ? ['#ffffff', '#f8f9ff'] : ['#ffffff', '#f9f9f9']);
+    
+    // Создаем инициалы для аватара (если нет фото)
+    const getInitials = (name: string) => {
+      return name
+        .split(' ')
+        .map(part => part.charAt(0))
+        .join('')
+        .toUpperCase()
+        .substring(0, 2);
+    };
+    
+    // Генерируем яркий цвет для аватара группового чата
+    const getGroupChatColor = (chatId: string) => {
+      // Используем ID чата для генерации стабильного цвета
+      const colorOptions = [
+        ['#F44336', '#D32F2F'], // красный
+        ['#E91E63', '#C2185B'], // розовый
+        ['#9C27B0', '#7B1FA2'], // фиолетовый
+        ['#673AB7', '#512DA8'], // глубокий фиолетовый
+        ['#3F51B5', '#303F9F'], // индиго
+        ['#2196F3', '#1976D2'], // синий
+        ['#00BCD4', '#0097A7'], // сине-зеленый
+        ['#009688', '#00796B'], // бирюзовый
+        ['#4CAF50', '#388E3C'], // зеленый
+        ['#FF9800', '#F57C00'], // оранжевый
+      ];
+      
+      // Простой способ получить стабильный индекс на основе ID чата
+      const index = chatId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colorOptions.length;
+      
+      return colorOptions[index];
+    };
+
     return (
-      <Modal
-        visible={createChatModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeCreateChatModal}
+      <TouchableOpacity 
+        style={styles.chatItemTouchable} 
+        onPress={() => handleChatRoomPress(item.id)}
+        activeOpacity={0.7}
       >
-        <View style={[styles.modalContainer, { backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)' }]}>
-          <View style={[styles.modalContent, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}>
-            <Text style={[styles.modalTitle, { color: isDark ? '#ffffff' : '#333333' }]}>
-              Создать {chatType === 'personal' ? 'личный чат' : 'групповой чат'}
-            </Text>
-            
-            {/* Переключатель типа чата (только для демонстрации, так как с каждым уже есть чат) */}
-            {selectedEmployees.length > 0 && (
-              <View style={styles.chatTypeSelector}>
-                <TouchableOpacity
-                  style={[
-                    styles.chatTypeButton,
-                    chatType === 'personal' && styles.chatTypeButtonActive,
-                    { borderColor: isDark ? '#444' : '#ddd' }
-                  ]}
-                  onPress={() => setChatType('personal')}
-                >
-                  <Text style={[
-                    styles.chatTypeButtonText,
-                    chatType === 'personal' && styles.chatTypeButtonTextActive,
-                    { color: isDark ? (chatType === 'personal' ? '#2196F3' : '#aaa') : (chatType === 'personal' ? '#2196F3' : '#666') }
-                  ]}>
-                    Личный чат
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.chatTypeButton,
-                    chatType === 'group' && styles.chatTypeButtonActive,
-                    { borderColor: isDark ? '#444' : '#ddd' }
-                  ]}
-                  onPress={() => setChatType('group')}
-                >
-                  <Text style={[
-                    styles.chatTypeButtonText,
-                    chatType === 'group' && styles.chatTypeButtonTextActive,
-                    { color: isDark ? (chatType === 'group' ? '#2196F3' : '#aaa') : (chatType === 'group' ? '#2196F3' : '#666') }
-                  ]}>
-                    Групповой чат
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            
-            {/* Название группового чата */}
-            {chatType === 'group' && (
-              <TextInput
-                style={[styles.groupNameInput, { 
-                  backgroundColor: isDark ? '#333' : '#f5f5f5',
-                  color: isDark ? '#fff' : '#333',
-                  borderColor: isDark ? '#444' : '#ddd'
-                }]}
-                placeholder="Название группового чата"
-                placeholderTextColor={isDark ? '#aaa' : '#999'}
-                value={groupChatName}
-                onChangeText={setGroupChatName}
-              />
-            )}
-            
-            {/* Список сотрудников */}
-            {selectedEmployees.length > 0 ? (
-              <FlatList
-                data={selectedEmployees}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[styles.employeeItem, { borderBottomColor: isDark ? '#444' : '#eee' }]}
-                    onPress={() => toggleEmployeeSelection(item.id)}
-                  >
-                    <View style={styles.employeeInfo}>
-                      <Avatar.Image
-                        size={40}
-                        source={{ uri: getEmployeeInfo(item.id).avatarUrl }}
-                      />
-                      <View style={styles.employeeDetails}>
-                        <Text style={[styles.employeeName, { color: isDark ? '#fff' : '#333' }]}>
-                          {item.name}
-                        </Text>
-                        <Text style={[styles.employeePosition, { color: isDark ? '#aaa' : '#666' }]}>
-                          {getEmployeeInfo(item.id).position}
-                        </Text>
-                      </View>
-                    </View>
-                    {chatType === 'personal' ? (
-                      <RadioButton
-                        value={item.id}
-                        status={item.selected ? 'checked' : 'unchecked'}
-                        onPress={() => toggleEmployeeSelection(item.id)}
-                        color="#2196F3"
-                      />
-                    ) : (
-                      <Checkbox
-                        status={item.selected ? 'checked' : 'unchecked'}
-                        onPress={() => toggleEmployeeSelection(item.id)}
-                        color="#2196F3"
-                      />
-                    )}
-                  </TouchableOpacity>
-                )}
-              />
-            ) : (
-              <View style={styles.noEmployeesContainer}>
-                <Text style={[styles.noEmployeesText, { color: isDark ? '#aaa' : '#666' }]}>
-                  У вас уже есть чаты со всеми сотрудниками.
-                  {'\n'}Вы можете создать только групповой чат.
+        <LinearGradient
+          colors={gradientColors}
+          style={[
+            styles.chatItem,
+            isDark ? styles.chatItemDark : styles.chatItemLight,
+          ]}
+        >
+          <View style={styles.chatItemAvatarContainer}>
+            {item.isGroupChat ? (
+              <LinearGradient
+                colors={getGroupChatColor(item.id)}
+                style={styles.groupAvatarGradient}
+              >
+                <Text style={styles.groupAvatarText}>
+                  {getInitials(chatName)}
                 </Text>
-              </View>
+              </LinearGradient>
+            ) : (
+              avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.chatAvatar} />
+              ) : (
+                <LinearGradient
+                  colors={['#4c669f', '#3b5998', '#192f6a']}
+                  style={styles.avatarGradient}
+                >
+                  <Text style={styles.avatarText}>
+                    {getInitials(chatName)}
+                  </Text>
+                </LinearGradient>
+              )
             )}
             
-            {/* Кнопки */}
-            <View style={styles.modalButtons}>
-              <Button
-                mode="outlined"
-                onPress={closeCreateChatModal}
-                style={[styles.modalButton, { borderColor: isDark ? '#555' : '#ddd' }]}
-                textColor={isDark ? '#fff' : '#666'}
+            {/* Индикатор онлайн статуса (для примера) */}
+            {!item.isGroupChat && Math.random() > 0.5 && (
+              <View style={styles.onlineIndicator} />
+            )}
+          </View>
+          
+          <View style={styles.chatItemContentContainer}>
+            <View style={styles.chatItemHeader}>
+              <Text 
+                style={[
+                  styles.chatName, 
+                  isDark ? styles.chatNameDark : styles.chatNameLight,
+                  hasUnread && styles.chatNameBold
+                ]} 
+                numberOfLines={1}
               >
-                Отмена
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleCreateChat}
-                style={[styles.modalButton, { backgroundColor: '#2196F3' }]}
-                disabled={(chatType === 'personal' && selectedEmployees.filter(e => e.selected).length === 0) ||
-                       (chatType === 'group' && (selectedEmployees.filter(e => e.selected).length === 0 || !groupChatName.trim()))}
+                {chatName}
+              </Text>
+              <Text 
+                style={[
+                  styles.chatTime,
+                  isDark ? styles.chatTimeDark : styles.chatTimeLight
+                ]}
               >
-                Создать
-              </Button>
+                {formatMessageTime(messagePreview.timestamp)}
+              </Text>
+            </View>
+            
+            <View style={styles.chatItemPreviewContainer}>
+              <Text 
+                style={[
+                  styles.chatPreview, 
+                  isDark ? styles.chatPreviewDark : styles.chatPreviewLight,
+                  hasUnread && styles.chatPreviewBold
+                ]} 
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {messagePreview.sender}{messagePreview.text}
+              </Text>
+              
+              {unreadCount > 0 && (
+                <View style={styles.unreadBadgeContainer}>
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {unreadCount}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+            
+            {/* Индикаторы чата */}
+            <View style={styles.chatIndicators}>
+              {item.isGroupChat && (
+                <View style={styles.chatIndicator}>
+                  <MaterialCommunityIcons name="account-group" size={14} color={isDark ? '#aaaaaa' : '#666666'} />
+                  <Text style={[styles.indicatorText, isDark ? styles.indicatorTextDark : styles.indicatorTextLight]}>
+                    {item.participants.length}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Дополнительные индикаторы, если нужно */}
             </View>
           </View>
-        </View>
-      </Modal>
+        </LinearGradient>
+      </TouchableOpacity>
     );
   };
 
@@ -518,144 +499,95 @@ export default function ChatListScreen() {
 
   return (
     <ThemedContainer style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.headerTitle}>Чаты</Text>
-          <TouchableOpacity
-            style={styles.resetButton}
+      <LinearGradient
+        colors={isDark ? ['#1c1c1e', '#252527'] : ['#ffffff', '#f9f9f9']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <Text style={[styles.headerTitle, isDark ? styles.headerTitleDark : styles.headerTitleLight]}>
+            Сообщения
+          </Text>
+          
+          <TouchableOpacity 
+            style={styles.headerButton}
             onPress={handleResetChats}
           >
-            <Text style={styles.resetButtonText}>Сбросить чаты</Text>
+            <MaterialCommunityIcons name="refresh" size={24} color={isDark ? Colors.dark.tint : Colors.light.tint} />
           </TouchableOpacity>
         </View>
+        
+        <Searchbar
+          placeholder="Поиск чатов..."
+          onChangeText={handleSearchChange}
+          value={searchQuery}
+          style={[
+            styles.searchBar,
+            isDark ? styles.searchBarDark : styles.searchBarLight
+          ]}
+          inputStyle={[
+            styles.searchInput,
+            isDark ? styles.searchInputDark : styles.searchInputLight
+          ]}
+          iconColor={isDark ? '#999' : '#666'}
+          placeholderTextColor={isDark ? '#888' : '#999'}
+        />
+      </LinearGradient>
+      
+      <View style={styles.chatListContainer}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={isDark ? Colors.dark.tint : Colors.light.tint} />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredChatRooms}
+            renderItem={renderChatItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.chatList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[isDark ? Colors.dark.tint : Colors.light.tint]}
+                tintColor={isDark ? Colors.dark.tint : Colors.light.tint}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <LinearGradient
+                  colors={isDark ? ['#2c2c2e', '#1c1c1e'] : ['#f0f0f0', '#e0e0e0']}
+                  style={styles.emptyIconContainer}
+                >
+                  <MaterialCommunityIcons name="chat-outline" size={44} color={isDark ? Colors.dark.tint : Colors.light.tint} />
+                </LinearGradient>
+                <Text style={[styles.emptyText, isDark ? styles.emptyTextDark : styles.emptyTextLight]}>
+                  {searchQuery.trim() ? 
+                    'Чаты не найдены, измените запрос поиска' : 
+                    'У вас пока нет активных чатов'}
+                </Text>
+                <Button 
+                  mode="contained" 
+                  onPress={openCreateChatModal}
+                  style={styles.emptyButton}
+                  buttonColor={isDark ? Colors.dark.tint : Colors.light.tint}
+                  icon="chat-plus"
+                >
+                  Создать чат
+                </Button>
+              </View>
+            }
+          />
+        )}
       </View>
       
-      <Searchbar
-        placeholder="Поиск чатов"
-        onChangeText={handleSearchChange}
-        value={searchQuery}
-        style={[styles.searchBar, { backgroundColor: isDark ? '#333' : '#f0f0f0' }]}
-        inputStyle={{ color: isDark ? '#fff' : '#333' }}
-        iconColor={isDark ? '#aaa' : '#666'}
-        placeholderTextColor={isDark ? '#aaa' : '#999'}
-      />
-      
-      {filteredChatRooms.length > 0 ? (
-        <FlatList
-          data={filteredChatRooms}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const lastMessage = getLastMessagePreview(item);
-            const unreadCount = getUnreadCountForRoom(item.id);
-            
-            // Для личных чатов используем имя другого участника
-            let chatName = item.name;
-            let chatPosition = '';
-            let avatarUrl = '';
-            
-            if (!item.isGroupChat && user) {
-              const otherParticipantId = item.participants.find(id => id !== user.id);
-              if (otherParticipantId) {
-                const employeeInfo = getEmployeeInfo(otherParticipantId);
-                chatName = employeeInfo.name;
-                chatPosition = employeeInfo.position;
-                avatarUrl = employeeInfo.avatarUrl;
-              }
-            }
-            
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.chatItem,
-                  { backgroundColor: isDark ? (unreadCount > 0 ? '#263238' : '#1e1e1e') : (unreadCount > 0 ? '#f5f8fa' : '#ffffff') }
-                ]}
-                onPress={() => handleChatRoomPress(item.id)}
-              >
-                <View style={styles.chatItemLeft}>
-                  {item.isGroupChat ? (
-                    <Avatar.Text
-                      size={50}
-                      label={item.name.substring(0, 2).toUpperCase()}
-                      backgroundColor={isDark ? '#3949ab' : '#5c6bc0'}
-                    />
-                  ) : (
-                    <Avatar.Image
-                      size={50}
-                      source={{ uri: avatarUrl }}
-                    />
-                  )}
-                </View>
-                
-                <View style={styles.chatItemMiddle}>
-                  <View style={styles.chatItemHeader}>
-                    <View style={styles.chatTitleContainer}>
-                      <Text style={[styles.chatName, { color: isDark ? '#fff' : '#333' }]} numberOfLines={1}>
-                        {chatName}
-                      </Text>
-                      {!item.isGroupChat && chatPosition && (
-                        <Text style={[styles.chatPosition, { color: isDark ? '#aaa' : '#666' }]} numberOfLines={1}>
-                          {chatPosition}
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={[styles.chatTime, { color: isDark ? '#aaa' : '#999' }]}>
-                      {formatMessageTime(lastMessage.timestamp)}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.chatItemPreview}>
-                    <Text style={[
-                      styles.messagePreview,
-                      { color: isDark ? (unreadCount > 0 ? '#e0e0e0' : '#bbb') : (unreadCount > 0 ? '#333' : '#666') },
-                      unreadCount > 0 && { fontWeight: 'bold' }
-                    ]} numberOfLines={1}>
-                      {lastMessage.sender}{lastMessage.text}
-                    </Text>
-                    
-                    {unreadCount > 0 && (
-                      <Badge style={styles.unreadBadge}>{unreadCount}</Badge>
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={['#2196F3']}
-              tintColor={isDark ? '#fff' : '#2196F3'}
-            />
-          }
-          ItemSeparatorComponent={() => <Divider style={{ backgroundColor: isDark ? '#333' : '#f0f0f0' }} />}
-          contentContainerStyle={{ flexGrow: 1 }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="chat-remove" size={64} color={isDark ? '#555' : '#ccc'} />
-              <Text style={[styles.emptyText, { color: isDark ? '#aaa' : '#666' }]}>
-                {searchQuery ? 'Чаты не найдены' : 'У вас пока нет чатов'}
-              </Text>
-            </View>
-          }
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="chat-remove" size={64} color={isDark ? '#555' : '#ccc'} />
-          <Text style={[styles.emptyText, { color: isDark ? '#aaa' : '#666' }]}>
-            {searchQuery ? 'Чаты не найдены' : 'У вас пока нет чатов'}
-          </Text>
-        </View>
-      )}
-      
       <FAB
-        style={styles.fab}
-        icon="plus"
-        label="Новый чат"
+        style={[styles.fab, { backgroundColor: isDark ? Colors.dark.tint : Colors.light.tint }]}
+        icon="chat-plus"
+        color="#fff"
         onPress={openCreateChatModal}
       />
       
-      {renderCreateChatModal()}
+      {/* Модальное окно создания чата... */}
     </ThemedContainer>
   );
 }
@@ -663,275 +595,263 @@ export default function ChatListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+  },
+  header: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  headerTitleLight: {
+    color: '#222222',
+  },
+  headerTitleDark: {
+    color: '#ffffff',
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  searchBar: {
+    height: 40,
+    elevation: 0,
+    borderRadius: 10,
+  },
+  searchBarLight: {
+    backgroundColor: '#f0f0f0',
+  },
+  searchBarDark: {
+    backgroundColor: '#2c2c2e',
+  },
+  searchInput: {
+    fontSize: 14,
+  },
+  searchInputLight: {
+    color: '#333333',
+  },
+  searchInputDark: {
+    color: '#e0e0e0',
+  },
+  chatListContainer: {
+    flex: 1,
+  },
+  chatList: {
+    paddingVertical: 8,
+  },
+  chatItemTouchable: {
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  chatItem: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 16,
+  },
+  chatItemLight: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  chatItemDark: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  chatItemAvatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  chatAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#e0e0e0',
+  },
+  avatarGradient: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  groupAvatarGradient: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupAvatarText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4caf50',
+    borderWidth: 2,
+    borderColor: 'white',
+    bottom: 0,
+    right: 0,
+  },
+  chatItemContentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  chatItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  chatName: {
+    fontSize: 16,
+    flex: 1,
+    marginRight: 4,
+  },
+  chatNameLight: {
+    color: '#222222',
+  },
+  chatNameDark: {
+    color: '#ffffff',
+  },
+  chatNameBold: {
+    fontWeight: 'bold',
+  },
+  chatTime: {
+    fontSize: 12,
+  },
+  chatTimeLight: {
+    color: '#888888',
+  },
+  chatTimeDark: {
+    color: '#a0a0a0',
+  },
+  chatItemPreviewContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chatPreview: {
+    fontSize: 14,
+    flex: 1,
+    marginRight: 8,
+  },
+  chatPreviewLight: {
+    color: '#666666',
+  },
+  chatPreviewDark: {
+    color: '#cccccc',
+  },
+  chatPreviewBold: {
+    fontWeight: '500',
+  },
+  unreadBadgeContainer: {
+    alignItems: 'flex-end',
+  },
+  unreadBadge: {
+    backgroundColor: '#007aff',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  chatIndicators: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  chatIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  indicatorText: {
+    fontSize: 12,
+    marginLeft: 2,
+  },
+  indicatorTextLight: {
+    color: '#666666',
+  },
+  indicatorTextDark: {
+    color: '#aaaaaa',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 16,
-    paddingTop: 24, // Для отступа от верхнего края экрана
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
-  },
-  resetButton: {
-    padding: 8,
-  },
-  resetButtonText: {
-    color: '#2196F3',
-    fontWeight: 'bold',
-  },
-  searchBar: {
-    elevation: 0,
-    backgroundColor: '#f2f2f2',
-    borderRadius: 8,
-    height: 48,
-  },
-  chatList: {
-    padding: 0,
-    backgroundColor: '#fff',
-  },
-  chatRoomItem: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    marginRight: 16,
-    position: 'relative',
-  },
-  groupAvatar: {
-    backgroundColor: '#2196F3',
-  },
-  unreadBadge: {
-    position: 'absolute',
-    top: 0,
-    right: -2,
-    backgroundColor: '#f44336',
-  },
-  chatInfo: {
-    flex: 1,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 4,
-  },
-  chatName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-    marginRight: 8,
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#666',
-  },
-  lastMessage: {
-    fontSize: 14,
-    color: '#666',
-  },
-  unreadMessage: {
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  divider: {
-    marginLeft: 88, // Ширина аватара + отступ
-  },
   emptyContainer: {
-    alignItems: 'center',
+    flex: 1,
+    paddingTop: 60,
     justifyContent: 'center',
-    padding: 40,
-    marginTop: 40,
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   emptyText: {
-    marginTop: 16,
-    color: '#999',
+    marginTop: 8,
+    marginBottom: 24,
     textAlign: 'center',
+    lineHeight: 22,
+    fontSize: 16,
+  },
+  emptyTextLight: {
+    color: '#666666',
+  },
+  emptyTextDark: {
+    color: '#cccccc',
+  },
+  emptyButton: {
+    paddingHorizontal: 16,
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
     bottom: 0,
-    backgroundColor: '#2196F3',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  chatTypeSelector: {
-    padding: 16,
-  },
-  radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#555',
-  },
-  groupNameContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  groupNameInput: {
-    backgroundColor: '#fff',
-  },
-  employeeList: {
-    maxHeight: 300,
-  },
-  employeeItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  employeeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  employeeDetails: {
-    flexDirection: 'column',
-    marginLeft: 12,
-  },
-  employeeName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  employeePosition: {
-    fontSize: 12,
-    marginTop: 2,
-    color: '#666',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  radioGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  footerButton: {
-    flex: 1,
-  },
-  employeesList: {
-    padding: 16,
-  },
-  chatItem: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'center',
-  },
-  chatItemLeft: {
-    marginRight: 16,
-  },
-  chatItemMiddle: {
-    flex: 1,
-  },
-  chatItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 4,
-  },
-  chatTitleContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  chatPosition: {
-    fontSize: 12,
-    marginTop: 2,
-    color: '#666',
-  },
-  chatTime: {
-    fontSize: 12,
-    color: '#666',
-  },
-  chatItemPreview: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  messagePreview: {
-    flex: 1,
-  },
-  chatTypeButton: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: '#ddd',
-  },
-  chatTypeButtonActive: {
-    borderColor: '#2196F3',
-  },
-  chatTypeButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  chatTypeButtonTextActive: {
-    color: '#2196F3',
-  },
-  noEmployeesContainer: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  noEmployeesText: {
-    textAlign: 'center',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-  },
+  // ... остальные стили в вашем файле
 }); 

@@ -5,12 +5,13 @@ import { useAuth } from '../../../context/AuthContext';
 import { useTask } from '../../../context/TaskContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, isToday } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ThemedContainer } from '@/components/ThemedContainer';
 import { Colors } from '@/constants/Colors';
 import { UserRole, TaskPriority, TaskStatus, Task } from '../../../types/index';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
@@ -216,30 +217,62 @@ export default function TasksScreen() {
   // Динамические стили на основе темы
   const dynamicStyles = {
     header: {
-      backgroundColor: isDark ? '#1e1e1e' : '#fff',
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
       borderBottomColor: isDark ? '#333' : '#eee',
     },
     headerTitle: {
       color: isDark ? Colors.dark.text : '#333',
     },
     searchBar: {
-      backgroundColor: isDark ? '#2c2c2c' : '#f2f2f2',
+      backgroundColor: isDark ? '#2c2c2c' : '#f5f5f5',
+      borderRadius: 12,
     },
     filterButton: {
-      backgroundColor: isDark ? '#2c2c2c' : '#f2f2f2',
+      backgroundColor: isDark ? '#2c2c2c' : '#f5f5f5',
+      borderRadius: 12,
     },
     taskItem: {
-      backgroundColor: isDark ? '#1e1e1e' : '#fff',
+      backgroundColor: isDark ? '#2c2c2e' : '#ffffff',
       shadowColor: isDark ? '#000' : '#000',
+      borderRadius: 16,
+      marginHorizontal: 16,
+      marginVertical: 8,
+      padding: 0,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 5,
+      elevation: 4,
+      overflow: 'hidden',
     },
     taskTitle: {
       color: isDark ? Colors.dark.text : '#333',
+      fontWeight: '600',
+      fontSize: 16,
     },
     completedTaskTitle: {
-      color: isDark ? '#666' : '#888',
+      color: isDark ? '#7f7f7f' : '#999',
+      textDecorationLine: 'line-through',
     },
     taskDescription: {
+      color: isDark ? '#b0b0b0' : '#666',
+      marginTop: 4,
+      lineHeight: 20,
+    },
+    dialog: {
+      backgroundColor: isDark ? '#2c2c2e' : '#ffffff',
+      borderRadius: 16,
+    },
+    dialogTitle: {
+      color: isDark ? Colors.dark.text : '#333',
+      fontWeight: '600',
+    },
+    dialogDescription: {
       color: isDark ? '#aaa' : '#666',
+      lineHeight: 20,
+    },
+    dialogLabel: {
+      fontWeight: 'bold',
+      color: isDark ? Colors.dark.text : '#333',
     },
   };
 
@@ -247,77 +280,130 @@ export default function TasksScreen() {
     const isPastDeadline = new Date(item.deadline) < new Date() && 
                            item.status !== TaskStatus.COMPLETED &&
                            item.status !== TaskStatus.CANCELLED;
+                           
+    const assignedEmployee = getEmployeeById(item.assignedTo);
+    const isTaskToday = isToday(new Date(item.deadline));
+
+    // Определение цветов для градиента карточки в зависимости от приоритета
+    let gradientColors;
+    let borderLeftColor;
+    
+    switch (item.priority) {
+      case TaskPriority.LOW:
+        gradientColors = isDark ? ['#263238', '#2c353a'] : ['#ffffff', '#f9fff9'];
+        borderLeftColor = '#28a745';
+        break;
+      case TaskPriority.MEDIUM:
+        gradientColors = isDark ? ['#263238', '#2c3838'] : ['#ffffff', '#fffff9'];
+        borderLeftColor = '#ffc107';
+        break;
+      case TaskPriority.HIGH:
+        gradientColors = isDark ? ['#2d2d38', '#332d38'] : ['#ffffff', '#fff9f9'];
+        borderLeftColor = '#fd7e14';
+        break;
+      case TaskPriority.URGENT:
+        gradientColors = isDark ? ['#3d2d2d', '#38232d'] : ['#ffffff', '#fff5f5'];
+        borderLeftColor = '#dc3545';
+        break;
+      default:
+        gradientColors = isDark ? ['#2d2d38', '#2c2c2e'] : ['#ffffff', '#fafafa'];
+        borderLeftColor = '#6c757d';
+    }
 
     return (
-      <TouchableOpacity 
-        style={[styles.taskItem, dynamicStyles.taskItem]} 
+      <TouchableOpacity
+        style={[
+          styles.taskItem, 
+          dynamicStyles.taskItem,
+          item.status === TaskStatus.COMPLETED && styles.completedTask
+        ]}
         onPress={() => handleTaskPress(item)}
+        activeOpacity={0.7}
       >
-        <View style={styles.taskHeader}>
-          <Text 
-            style={[
-              styles.taskTitle,
-              dynamicStyles.taskTitle,
-              (item.status === TaskStatus.COMPLETED || item.status === TaskStatus.CANCELLED) && 
-              [styles.completedTaskTitle, dynamicStyles.completedTaskTitle]
-            ]}
-            numberOfLines={1}
-          >
-            {item.title}
-          </Text>
-          <Chip 
-            mode="outlined" 
-            style={[styles.priorityChip, { borderColor: getTaskPriorityColor(item.priority) }]}
-            textStyle={{ color: getTaskPriorityColor(item.priority) }}
-          >
-            {item.priority === TaskPriority.LOW ? 'Низкий' :
-             item.priority === TaskPriority.MEDIUM ? 'Средний' :
-             item.priority === TaskPriority.HIGH ? 'Высокий' : 'Срочно'}
-          </Chip>
-        </View>
-        
-        {item.description && (
-          <Text 
-            style={[styles.taskDescription, dynamicStyles.taskDescription]} 
-            numberOfLines={2}
-          >
-            {item.description}
-          </Text>
-        )}
-        
-        <View style={styles.taskMeta}>
-          <View style={styles.taskMetaItem}>
-            <MaterialCommunityIcons name="calendar" size={16} color={isDark ? '#888' : '#666'} style={{ marginRight: 4 }} />
-            <Text style={{ color: isDark ? '#888' : '#666' }}>
-              Срок: {formatDate(item.deadline)}
-            </Text>
+        <LinearGradient
+          colors={gradientColors}
+          style={[
+            styles.taskItemGradient, 
+            { 
+              borderLeftWidth: 4,
+              borderLeftColor: borderLeftColor
+            }
+          ]}
+        >
+          <View style={styles.taskHeader}>
+            <View style={styles.taskTitleContainer}>
+              <Text 
+                style={[
+                  styles.taskTitle, 
+                  dynamicStyles.taskTitle,
+                  item.status === TaskStatus.COMPLETED && [styles.completedTaskTitle, dynamicStyles.completedTaskTitle]
+                ]}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
+              
+              {isTaskToday && item.status !== TaskStatus.COMPLETED && (
+                <View style={styles.todayIndicator}>
+                  <Text style={styles.todayText}>Сегодня</Text>
+                </View>
+              )}
+            </View>
           </View>
-          
-          <Chip 
-            mode="flat" 
-            style={{ backgroundColor: getTaskStatusColor(item.status), height: 22 }}
-            textStyle={{ color: '#fff', fontSize: 12 }}
-          >
-            {getTaskStatusText(item.status)}
-          </Chip>
-        </View>
-        
-        <View style={styles.taskFooter}>
-          <View style={styles.assigneeContainer}>
-            <Avatar.Image 
-              size={24} 
-              source={{ uri: getEmployeeById(item.assignedTo)?.avatarUrl }} 
-              style={{ marginRight: 8 }}
-            />
-            <Text style={{ color: isDark ? '#888' : '#666' }}>
-              {getEmployeeById(item.assignedTo)?.name}
+
+          {item.description ? (
+            <Text 
+              style={[styles.taskDescription, dynamicStyles.taskDescription]} 
+              numberOfLines={2}
+            >
+              {item.description}
             </Text>
-          </View>
+          ) : null}
           
-          {user?.role !== UserRole.EMPLOYEE && (
-            <MaterialCommunityIcons name="chevron-right" size={24} color={isDark ? '#555' : '#ccc'} />
-          )}
-        </View>
+          <View style={[styles.taskMetaContainer, !item.description && styles.taskMetaNoDescription]}>
+            <View style={styles.assigneeSection}>
+              <Avatar.Image 
+                size={24} 
+                source={{ uri: assignedEmployee.avatarUrl }}
+                style={styles.assigneeAvatar}
+              />
+              <Text style={[styles.assigneeName, { color: isDark ? '#aaa' : '#666' }]} numberOfLines={1}>
+                {assignedEmployee.name}
+              </Text>
+            </View>
+            
+            <View style={styles.taskMetaInfo}>
+              <View style={styles.taskDeadline}>
+                <MaterialCommunityIcons 
+                  name="calendar" 
+                  size={16} 
+                  color={isPastDeadline ? '#dc3545' : (isDark ? '#888' : '#666')} 
+                />
+                <Text 
+                  style={[
+                    styles.deadlineText, 
+                    isPastDeadline && styles.pastDeadlineText,
+                    { color: isPastDeadline ? '#dc3545' : (isDark ? '#aaa' : '#666') }
+                  ]}
+                >
+                  {format(new Date(item.deadline), 'dd MMM, HH:mm', { locale: ru })}
+                </Text>
+              </View>
+              
+              <View style={[
+                styles.taskStatusChip,
+                { backgroundColor: getTaskStatusColor(item.status) + '20' }
+              ]}>
+                <Text style={[
+                  styles.taskStatusText,
+                  { color: getTaskStatusColor(item.status) }
+                ]}>
+                  {getTaskStatusText(item.status)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   };
@@ -352,86 +438,139 @@ export default function TasksScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
+        <ActivityIndicator size="large" color={isDark ? Colors.dark.tint : Colors.light.tint} />
       </View>
     );
   }
 
   return (
-    <ThemedContainer>
-      <View style={[styles.header, dynamicStyles.header]}>
+    <ThemedContainer style={styles.container}>
+      <LinearGradient
+        colors={isDark ? ['#1c1c1e', '#252527'] : ['#ffffff', '#f9f9f9']}
+        style={[styles.header, dynamicStyles.header]}
+      >
         <Text style={[styles.headerTitle, dynamicStyles.headerTitle]}>Задачи</Text>
         
-        <View style={styles.searchContainer}>
-          <Searchbar 
-            placeholder="Поиск по названию или описанию"
+        <View style={styles.searchFilterContainer}>
+          <Searchbar
+            placeholder="Поиск задач..."
             onChangeText={handleSearchChange}
             value={searchQuery}
             style={[styles.searchBar, dynamicStyles.searchBar]}
-            iconColor={isDark ? Colors.dark.icon : Colors.light.icon}
-            inputStyle={{ color: isDark ? Colors.dark.text : Colors.light.text }}
-            placeholderTextColor={isDark ? '#888' : '#666'}
+            inputStyle={styles.searchInput}
+            iconColor={isDark ? '#999' : '#666'}
+            clearIcon="close-circle"
           />
           
-          <TouchableOpacity 
+          <TouchableOpacity
             ref={filterButtonRef}
             style={[styles.filterButton, dynamicStyles.filterButton]}
             onPress={showFilterMenu}
           >
-            <MaterialCommunityIcons name="filter-variant" size={24} color={isDark ? Colors.dark.icon : Colors.light.icon} />
+            <MaterialCommunityIcons 
+              name="filter-variant" 
+              size={24} 
+              color={isDark ? Colors.dark.tint : Colors.light.tint} 
+            />
           </TouchableOpacity>
         </View>
-      </View>
+        
+        <View style={styles.chipContainer}>
+          {selectedStatus && (
+            <Chip 
+              mode="outlined" 
+              onClose={() => setSelectedStatus(null)}
+              style={[styles.chip, { borderColor: isDark ? '#555' : '#ddd' }]}
+              textStyle={{ color: isDark ? Colors.dark.text : Colors.light.text }}
+            >
+              {getTaskStatusText(selectedStatus as TaskStatus)}
+            </Chip>
+          )}
+          
+          {selectedPriority && (
+            <Chip 
+              mode="outlined" 
+              onClose={() => setSelectedPriority(null)}
+              style={[styles.chip, { borderColor: isDark ? '#555' : '#ddd' }]}
+              textStyle={{ color: isDark ? Colors.dark.text : Colors.light.text }}
+            >
+              {selectedPriority}
+            </Chip>
+          )}
+          
+          {(selectedStatus || selectedPriority) && (
+            <Chip 
+              mode="outlined" 
+              onPress={resetFilters}
+              style={[styles.chip, { borderColor: isDark ? '#555' : '#ddd' }]}
+              textStyle={{ color: isDark ? '#ff5252' : '#e53935' }}
+            >
+              Сбросить
+            </Chip>
+          )}
+        </View>
+      </LinearGradient>
       
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
+          <ActivityIndicator size="large" color={isDark ? Colors.dark.tint : Colors.light.tint} />
         </View>
       ) : (
         <FlatList
           data={filteredTasks}
           renderItem={renderTaskItem}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.tasksList}
+          contentContainerStyle={styles.taskList}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#2196F3"]}
+              colors={[isDark ? Colors.dark.tint : Colors.light.tint]}
+              tintColor={isDark ? Colors.dark.tint : Colors.light.tint}
             />
           }
           ListEmptyComponent={
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={isDark ? '#555' : '#ccc'} />
-              <Text style={{ marginTop: 12, color: isDark ? '#888' : '#666', textAlign: 'center' }}>
-                {searchQuery || selectedStatus || selectedPriority ? 
-                  'Нет задач, соответствующих фильтрам' : 
-                  'Нет доступных задач'}
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="clipboard-text-outline" size={64} color={isDark ? '#555' : '#ccc'} />
+              <Text style={[styles.emptyText, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
+                {searchQuery.trim() || selectedStatus || selectedPriority ? 
+                  'Задачи не найдены. Попробуйте изменить параметры поиска.' : 
+                  'Нет активных задач.'}
               </Text>
-              {(searchQuery || selectedStatus || selectedPriority) && (
-                <Button mode="text" onPress={resetFilters} style={{ marginTop: 8 }}>
-                  Сбросить фильтры
-                </Button>
-              )}
+              <Button 
+                mode="contained" 
+                onPress={user?.role !== UserRole.EMPLOYEE ? goToCreateTask : resetFilters}
+                style={styles.emptyButton}
+                buttonColor={isDark ? Colors.dark.tint : Colors.light.tint}
+              >
+                {user?.role !== UserRole.EMPLOYEE ? 'Создать задачу' : 'Сбросить фильтры'}
+              </Button>
             </View>
           }
         />
       )}
       
-      {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
-        <FAB
-          icon="plus"
-          style={styles.fab}
-          onPress={goToCreateTask}
-        />
-      )}
+      <FAB
+        style={[
+          styles.fab,
+          { backgroundColor: isDark ? Colors.dark.tint : Colors.light.tint }
+        ]}
+        icon="plus"
+        color="#fff"
+        onPress={goToCreateTask}
+        visible={user?.role !== UserRole.EMPLOYEE}
+      />
       
       <Portal>
         <Menu
           visible={filterMenuVisible}
           onDismiss={() => setFilterMenuVisible(false)}
           anchor={menuPosition}
-          contentStyle={{ backgroundColor: isDark ? '#2c2c2c' : 'white' }}
+          contentStyle={{ 
+            backgroundColor: isDark ? '#2c2c2e' : 'white',
+            borderRadius: 16,
+            marginTop: 8
+          }}
         >
           <Menu.Item 
             title="Фильтр по статусу"
@@ -581,82 +720,103 @@ export default function TasksScreen() {
         <Dialog 
           visible={taskDetailVisible} 
           onDismiss={() => setTaskDetailVisible(false)}
-          style={{ backgroundColor: isDark ? '#1e1e1e' : 'white' }}
+          style={[styles.dialog, dynamicStyles.dialog]}
         >
           {selectedTask && (
             <>
-              <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>{selectedTask.title}</Dialog.Title>
+              <Dialog.Title style={dynamicStyles.dialogTitle}>{selectedTask.title}</Dialog.Title>
               <Dialog.Content>
                 {selectedTask.description && (
-                  <Text style={{ marginBottom: 16, color: isDark ? '#aaa' : '#666' }}>
+                  <Text style={[styles.dialogDescription, dynamicStyles.dialogDescription]}>
                     {selectedTask.description}
                   </Text>
                 )}
                 
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontWeight: 'bold', marginRight: 8, color: isDark ? Colors.dark.text : '#333' }}>
+                <View style={styles.dialogSection}>
+                  <Text style={dynamicStyles.dialogLabel}>
                     Статус:
                   </Text>
-                  <Chip 
-                    mode="flat" 
-                    style={{ backgroundColor: getTaskStatusColor(selectedTask.status) }}
-                    textStyle={{ color: '#fff' }}
-                  >
-                    {getTaskStatusText(selectedTask.status)}
-                  </Chip>
+                  <View style={styles.statusChipContainer}>
+                    <LinearGradient
+                      colors={[getTaskStatusColor(selectedTask.status) + '40', getTaskStatusColor(selectedTask.status) + '20']}
+                      style={styles.statusChipGradient}
+                    >
+                      <Text style={[styles.statusChipText, { color: getTaskStatusColor(selectedTask.status) }]}>
+                        {getTaskStatusText(selectedTask.status)}
+                      </Text>
+                    </LinearGradient>
+                  </View>
                 </View>
                 
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontWeight: 'bold', marginRight: 8, color: isDark ? Colors.dark.text : '#333' }}>
+                <View style={styles.dialogSection}>
+                  <Text style={dynamicStyles.dialogLabel}>
                     Приоритет:
                   </Text>
-                  <Chip 
-                    mode="outlined" 
-                    style={{ borderColor: getTaskPriorityColor(selectedTask.priority) }}
-                    textStyle={{ color: getTaskPriorityColor(selectedTask.priority) }}
-                  >
-                    {selectedTask.priority === TaskPriority.LOW ? 'Низкий' :
-                     selectedTask.priority === TaskPriority.MEDIUM ? 'Средний' :
-                     selectedTask.priority === TaskPriority.HIGH ? 'Высокий' : 'Срочно'}
-                  </Chip>
+                  <View style={styles.priorityChipContainer}>
+                    <LinearGradient
+                      colors={[getTaskPriorityColor(selectedTask.priority) + '40', getTaskPriorityColor(selectedTask.priority) + '20']}
+                      style={styles.priorityChipGradient}
+                    >
+                      <Text style={[styles.priorityChipText, { color: getTaskPriorityColor(selectedTask.priority) }]}>
+                        {selectedTask.priority === TaskPriority.LOW ? 'Низкий' :
+                         selectedTask.priority === TaskPriority.MEDIUM ? 'Средний' :
+                         selectedTask.priority === TaskPriority.HIGH ? 'Высокий' : 'Срочно'}
+                      </Text>
+                    </LinearGradient>
+                  </View>
                 </View>
                 
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontWeight: 'bold', marginRight: 8, color: isDark ? Colors.dark.text : '#333' }}>
+                <View style={styles.dialogSection}>
+                  <Text style={dynamicStyles.dialogLabel}>
                     Срок выполнения:
                   </Text>
-                  <Text style={{ color: isDark ? '#aaa' : '#666' }}>
-                    {formatDate(selectedTask.deadline)}
-                  </Text>
-                </View>
-                
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontWeight: 'bold', marginRight: 8, color: isDark ? Colors.dark.text : '#333' }}>
-                    Исполнитель:
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Avatar.Image 
-                      size={24} 
-                      source={{ uri: getEmployeeById(selectedTask.assignedTo)?.avatarUrl }} 
-                      style={{ marginRight: 8 }}
+                  <View style={styles.deadlineContainer}>
+                    <MaterialCommunityIcons 
+                      name="calendar-clock" 
+                      size={20}
+                      color={isDark ? Colors.dark.tint : Colors.light.tint}
+                      style={styles.dialogIcon}
                     />
-                    <Text style={{ color: isDark ? '#aaa' : '#666' }}>
-                      {getEmployeeById(selectedTask.assignedTo)?.name}
+                    <Text style={dynamicStyles.dialogDescription}>
+                      {formatDate(selectedTask.deadline)}
                     </Text>
                   </View>
                 </View>
                 
+                <View style={styles.dialogSection}>
+                  <Text style={dynamicStyles.dialogLabel}>
+                    Исполнитель:
+                  </Text>
+                  <View style={styles.assigneeContainer}>
+                    <Avatar.Image 
+                      size={32} 
+                      source={{ uri: getEmployeeById(selectedTask.assignedTo)?.avatarUrl }} 
+                      style={styles.dialogAvatar}
+                    />
+                    <View>
+                      <Text style={[styles.assigneeDialogName, { color: isDark ? Colors.dark.text : '#333' }]}>
+                        {getEmployeeById(selectedTask.assignedTo)?.name}
+                      </Text>
+                      <Text style={[styles.assigneeDialogPosition, { color: isDark ? '#aaa' : '#666' }]}>
+                        {getEmployeeById(selectedTask.assignedTo)?.position}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                
                 {user?.id === selectedTask.assignedTo && selectedTask.status !== TaskStatus.COMPLETED && selectedTask.status !== TaskStatus.CANCELLED && (
-                  <View style={{ marginTop: 16 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 8, color: isDark ? Colors.dark.text : '#333' }}>
+                  <View style={styles.dialogActionsSection}>
+                    <Text style={[dynamicStyles.dialogLabel, styles.actionsLabel]}>
                       Действия:
                     </Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <View style={styles.actionButtonsContainer}>
                       {selectedTask.status === TaskStatus.ASSIGNED && (
                         <Button 
                           mode="contained" 
                           onPress={() => handleChangeTaskStatus(selectedTask, TaskStatus.IN_PROGRESS)}
-                          style={{ flex: 1 }}
+                          style={styles.actionButton}
+                          buttonColor={Colors.light.tint}
+                          icon="play"
                         >
                           Начать работу
                         </Button>
@@ -666,9 +826,11 @@ export default function TasksScreen() {
                         <Button 
                           mode="contained" 
                           onPress={() => handleChangeTaskStatus(selectedTask, TaskStatus.COMPLETED)}
-                          style={{ flex: 1 }}
+                          style={styles.actionButton}
+                          buttonColor="#28a745"
+                          icon="check"
                         >
-                          Завершить задачу
+                          Завершить
                         </Button>
                       )}
                     </View>
@@ -676,7 +838,12 @@ export default function TasksScreen() {
                 )}
               </Dialog.Content>
               <Dialog.Actions>
-                <Button onPress={() => setTaskDetailVisible(false)}>Закрыть</Button>
+                <Button 
+                  onPress={() => setTaskDetailVisible(false)}
+                  textColor={isDark ? Colors.dark.tint : Colors.light.tint}
+                >
+                  Закрыть
+                </Button>
               </Dialog.Actions>
             </>
           )}
@@ -689,232 +856,250 @@ export default function TasksScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
-    backgroundColor: '#fff',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    elevation: 2,
+    zIndex: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
+    marginBottom: 16,
   },
-  searchContainer: {
+  searchFilterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
   searchBar: {
     flex: 1,
+    height: 40,
     marginRight: 8,
     elevation: 0,
-    backgroundColor: '#f2f2f2',
-    borderRadius: 8,
-    height: 48,
+  },
+  searchInput: {
+    fontSize: 14,
   },
   filterButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f2f2f2',
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    height: 48,
-    width: 48,
+    elevation: 0,
   },
-  tasksList: {
-    padding: 16,
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  chip: {
+    marginRight: 8,
+    marginBottom: 8,
+    height: 30,
+  },
+  taskList: {
+    paddingVertical: 8,
     paddingBottom: 80,
   },
   taskItem: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  taskItemGradient: {
     padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    height: 'auto',
+    minHeight: 90,
   },
   taskHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+  taskTitleContainer: {
     flex: 1,
-    marginRight: 8,
-  },
-  completedTaskTitle: {
-    textDecorationLine: 'line-through',
-    color: '#888',
-  },
-  priorityChip: {
-    height: 26,
-  },
-  taskDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  taskMeta: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
   },
-  taskFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  assigneeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  assigneeName: {
-    fontSize: 12,
-    color: '#333',
+  todayIndicator: {
+    backgroundColor: '#dc3545',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
     marginLeft: 8,
   },
-  deadlineContainer: {
+  todayText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  taskTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  taskDescription: {
+    marginBottom: 16,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  taskMetaContainer: {
+    marginTop: 8,
+  },
+  taskMetaNoDescription: {
+    marginTop: 16,
+  },
+  assigneeSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  assigneeAvatar: {
+    marginRight: 8,
+  },
+  assigneeName: {
+    fontSize: 13,
+  },
+  taskMetaInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  taskDeadline: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   deadlineText: {
     fontSize: 12,
-    color: '#666',
     marginLeft: 4,
   },
   pastDeadlineText: {
-    color: '#dc3545',
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
-  commentsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  taskStatusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  commentsText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
+  taskStatusText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  completedTask: {
+    opacity: 0.7,
+  },
+  completedTaskTitle: {
+    textDecorationLine: 'line-through',
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
     bottom: 0,
-    backgroundColor: '#2196F3',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyContainer: {
-    alignItems: 'center',
+    flex: 1,
+    paddingTop: 60,
     justifyContent: 'center',
-    padding: 40,
+    alignItems: 'center',
+    paddingHorizontal: 32,
   },
   emptyText: {
     marginTop: 16,
-    color: '#999',
+    marginBottom: 24,
     textAlign: 'center',
+    lineHeight: 22,
   },
-  resetFiltersButton: {
-    marginTop: 16,
-  },
-  filterMenu: {
-    width: Dimensions.get('window').width * 0.9,
-    maxWidth: 400,
-  },
-  filterMenuTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    margin: 16,
-  },
-  filterMenuSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 12,
-    marginLeft: 16,
-    marginBottom: 8,
-  },
-  statusFilters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-  },
-  priorityFilters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-  },
-  sortOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-  },
-  sortDirection: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
+  emptyButton: {
     marginTop: 8,
   },
-  filterChip: {
-    margin: 4,
-  },
-  filterMenuFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 8,
-  },
   dialog: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    maxHeight: '80%',
+    margin: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  dialogContent: {
-    maxHeight: 400,
+  dialogDescription: {
+    marginBottom: 24,
+    lineHeight: 20,
   },
   dialogSection: {
     marginBottom: 16,
   },
-  dialogSectionTitle: {
+  statusChipContainer: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  statusChipGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  statusChipText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
-    marginBottom: 4,
+    fontWeight: '500',
   },
-  dialogText: {
-    fontSize: 16,
-    color: '#333',
+  priorityChipContainer: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
   },
-  dialogSubtext: {
-    fontSize: 12,
-    color: '#666',
+  priorityChipGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  assigneeDialogContainer: {
+  priorityChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  deadlineContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
   },
-  assigneeDialogInfo: {
-    marginLeft: 16,
+  dialogIcon: {
+    marginRight: 8,
   },
-  statusButtonsContainer: {
+  assigneeContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     marginTop: 8,
   },
-  statusButton: {
-    margin: 4,
+  dialogAvatar: {
+    marginRight: 12,
+  },
+  assigneeDialogName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  assigneeDialogPosition: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  dialogActionsSection: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 150, 150, 0.2)',
+    paddingTop: 16,
+  },
+  actionsLabel: {
+    marginBottom: 12,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+  },
+  actionButton: {
+    borderRadius: 8,
   },
 }); 

@@ -28,6 +28,22 @@ export interface User {
   department?: string;
 }
 
+export interface Employee {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  avatarUrl: string;
+  isOnline: boolean;
+  completedTasks: number;
+  activeTasks: number;
+  projects: number;
+  email: string;
+  phone: string;
+  efficiency: string;
+  timeliness: string;
+}
+
 export interface Task {
   id: string;
   title: string;

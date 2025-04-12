@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
-import { Avatar, Button, FAB, ActivityIndicator, Dialog, Portal, Chip, Searchbar, SegmentedButtons } from 'react-native-paper';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput as RNTextInput, RefreshControl, Alert, Image, ScrollView, Modal } from 'react-native';
+import { Avatar, Button, FAB, ActivityIndicator, Dialog, Portal, Chip, Searchbar, SegmentedButtons, IconButton } from 'react-native-paper';
 import { User, UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Временный список сотрудников
 const DEMO_USERS: User[] = [
@@ -63,6 +65,9 @@ const DEMO_USERS: User[] = [
   },
 ];
 
+// Ключ для хранения данных в AsyncStorage
+const EMPLOYEES_STORAGE_KEY = 'app_employees_data';
+
 export default function EmployeesScreen() {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -85,6 +90,26 @@ export default function EmployeesScreen() {
     position: '',
   });
 
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  const [showPositionDropdown, setShowPositionDropdown] = useState(false);
+  const [showEmailDropdown, setShowEmailDropdown] = useState(false);
+  const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
+  
+  // Предопределенные данные для выбора
+  const departments = ['Разработка', 'Дизайн', 'Маркетинг', 'Продажи', 'QA', 'HR', 'Финансы'];
+  
+  const positions = {
+    'Разработка': ['Разработчик', 'Старший разработчик', 'Тимлид', 'Архитектор'],
+    'Дизайн': ['UI/UX дизайнер', 'Графический дизайнер', 'Продуктовый дизайнер'],
+    'Маркетинг': ['Маркетолог', 'SMM-специалист', 'Контент-менеджер'],
+    'Продажи': ['Менеджер продаж', 'Руководитель отдела продаж', 'Аналитик'],
+    'QA': ['QA инженер', 'Тестировщик', 'Автоматизатор тестирования'],
+    'HR': ['HR-менеджер', 'Рекрутер', 'Специалист по обучению'],
+    'Финансы': ['Бухгалтер', 'Финансовый аналитик', 'Экономист']
+  };
+  
+  const emailDomains = ['company.com', 'example.org', 'mail.ru', 'gmail.com'];
+
   useEffect(() => {
     loadEmployees();
   }, []);
@@ -93,18 +118,64 @@ export default function EmployeesScreen() {
     filterEmployees();
   }, [employees, searchQuery, selectedFilter]);
 
-  const loadEmployees = () => {
-    // Имитация загрузки данных с сервера
-    setTimeout(() => {
-      setEmployees(DEMO_USERS);
+  // Сохранение списка сотрудников в AsyncStorage
+  useEffect(() => {
+    if (employees.length > 0) {
+      saveEmployeesToStorage();
+    }
+  }, [employees]);
+
+  // Функция для сохранения сотрудников в AsyncStorage
+  const saveEmployeesToStorage = async () => {
+    try {
+      const jsonValue = JSON.stringify(employees);
+      await AsyncStorage.setItem(EMPLOYEES_STORAGE_KEY, jsonValue);
+      console.log('Сотрудники сохранены в хранилище');
+    } catch (e) {
+      console.error('Ошибка при сохранении сотрудников:', e);
+    }
+  };
+
+  const loadEmployees = async () => {
+    setLoading(true);
+    
+    try {
+      // Пытаемся загрузить сохраненных сотрудников из AsyncStorage
+      const savedEmployees = await AsyncStorage.getItem(EMPLOYEES_STORAGE_KEY);
+      
+      if (savedEmployees !== null) {
+        // Если есть сохраненные данные, используем их
+        setEmployees(JSON.parse(savedEmployees));
+        console.log('Сотрудники загружены из хранилища');
+      } else {
+        // Если нет сохраненных данных, используем демо-данные
+        setEmployees(DEMO_USERS);
+        console.log('Загружены демо-сотрудники');
+      }
+    } catch (e) {
+      console.error('Ошибка при загрузке сотрудников:', e);
+      setEmployees(DEMO_USERS); // Если произошла ошибка, загружаем демо-данные
+    } finally {
       setLoading(false);
       setRefreshing(false);
-    }, 1000);
+    }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
     loadEmployees();
+  };
+
+  // Функция для сброса данных к демо-данным
+  const resetToDefaultEmployees = async () => {
+    try {
+      await AsyncStorage.removeItem(EMPLOYEES_STORAGE_KEY);
+      setEmployees(DEMO_USERS);
+      Alert.alert('Успешно', 'Список сотрудников сброшен к начальному состоянию');
+    } catch (e) {
+      console.error('Ошибка при сбросе сотрудников:', e);
+      Alert.alert('Ошибка', 'Не удалось сбросить список сотрудников');
+    }
   };
 
   const filterEmployees = () => {
@@ -221,37 +292,256 @@ export default function EmployeesScreen() {
     }
   };
 
+  const getDepartmentColor = (department: string) => {
+    // Генерация цвета на основе названия отдела
+    const departmentMap: {[key: string]: string[]} = {
+      'Разработка': ['#4CAF50', '#2E7D32'],
+      'Дизайн': ['#9C27B0', '#7B1FA2'],
+      'Маркетинг': ['#FF9800', '#F57C00'],
+      'Продажи': ['#2196F3', '#1976D2'],
+      'QA': ['#FF5722', '#E64A19'],
+      'HR': ['#3F51B5', '#303F9F'],
+      'Финансы': ['#009688', '#00796B'],
+    };
+    
+    return departmentMap[department] || ['#757575', '#616161'];
+  };
+
+  const getStatusColor = (online: boolean) => {
+    return online ? '#4CAF50' : '#9E9E9E';
+  };
+
+  // Вспомогательная функция для создания градиента роли
+  const getRoleGradient = (role: string) => {
+    switch (role) {
+      case UserRole.ADMIN:
+        return ['#F44336', '#D32F2F'];
+      case UserRole.MANAGER:
+        return ['#2196F3', '#1976D2'];
+      case UserRole.EMPLOYEE:
+        return ['#4CAF50', '#388E3C'];
+      default:
+        return ['#757575', '#616161'];
+    }
+  };
+
+  // Обновленная функция для генерации email на основе имени
+  const generateEmail = (name: string, domain: string) => {
+    // Транслитерация кириллицы в латиницу
+    const translit = (text: string): string => {
+      const ru = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
+        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+        'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu',
+        'я': 'ya',
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'ZH',
+        'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+        'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'TS',
+        'Ч': 'CH', 'Ш': 'SH', 'Щ': 'SCH', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'YU',
+        'Я': 'YA'
+      };
+      return text.split('').map(char => ru[char.toLowerCase()] || char).join('');
+    };
+    
+    // Обрабатываем имя: транслитерация, приведение к нижнему регистру, замена пробелов и спецсимволов
+    const nameParts = name.split(' ');
+    let emailPrefix = '';
+    
+    if (nameParts.length >= 2) {
+      // Если есть имя и фамилия, берем первую букву имени и всю фамилию
+      const firstName = translit(nameParts[0]);
+      const lastName = translit(nameParts[1]);
+      emailPrefix = `${firstName.charAt(0).toLowerCase()}.${lastName.toLowerCase()}`;
+    } else {
+      // Если только одно слово, берем его целиком
+      emailPrefix = translit(name.toLowerCase());
+    }
+    
+    emailPrefix = emailPrefix.replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+    return `${emailPrefix}@${domain}`;
+  };
+
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: isDark ? '#121212' : '#f5f5f5' }]}>
-        <ActivityIndicator size="large" color="#2196F3" />
-      </View>
+      <LinearGradient
+        colors={isDark ? ['#121212', '#1a1a1a'] : ['#f5f5f5', '#e5e5e5']}
+        style={styles.loadingContainer}
+      >
+        <ActivityIndicator size="large" color={isDark ? Colors.dark.tint : Colors.light.tint} />
+      </LinearGradient>
     );
   }
 
+  const renderEmployeeItem = ({ item }: { item: User }) => {
+    // Определяем случайный статус для демонстрации (в реальном приложении это будет настоящий статус)
+    const isOnline = item.id === '1' || item.id === '3' || item.id === '6';
+    
+    return (
+      <TouchableOpacity
+        style={styles.employeeItemContainer}
+        onPress={() => handleEmployeePress(item)}
+        activeOpacity={0.7}
+      >
+        <LinearGradient
+          colors={isDark ? ['#1e1e1e', '#252527'] : ['#ffffff', '#f8f8fa']}
+          style={styles.employeeItem}
+        >
+          <View style={styles.employeeHeader}>
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={getDepartmentColor(item.department || 'Разработка')}
+                style={styles.avatarBorder}
+              >
+                <Image
+                  source={{ uri: item.avatarUrl }}
+                  style={styles.avatar}
+                />
+                <View 
+                  style={[
+                    styles.statusIndicator, 
+                    { backgroundColor: getStatusColor(isOnline) }
+                  ]} 
+                />
+              </LinearGradient>
+            </View>
+            
+            <View style={styles.employeeInfo}>
+              <Text style={[styles.employeeName, { color: isDark ? Colors.dark.text : '#333' }]}>
+                {item.name}
+              </Text>
+              
+              <LinearGradient
+                colors={getRoleGradient(item.role)}
+                style={styles.roleChip}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+              >
+                <Text style={styles.roleChipText}>
+                  {getRoleText(item.role)}
+                </Text>
+              </LinearGradient>
+              
+              <View style={styles.employeeDetails}>
+                {item.position && (
+                  <View style={styles.detailItem}>
+                    <MaterialCommunityIcons 
+                      name="briefcase-outline" 
+                      size={14} 
+                      color={isDark ? '#aaa' : '#666'} 
+                      style={styles.detailIcon}
+                    />
+                    <Text style={[styles.detailText, { color: isDark ? '#aaa' : '#666' }]}>
+                      {item.position}
+                    </Text>
+                  </View>
+                )}
+                
+                {item.department && (
+                  <View style={styles.detailItem}>
+                    <MaterialCommunityIcons 
+                      name="office-building-outline" 
+                      size={14} 
+                      color={isDark ? '#aaa' : '#666'} 
+                      style={styles.detailIcon}
+                    />
+                    <Text style={[styles.detailText, { color: isDark ? '#aaa' : '#666' }]}>
+                      {item.department}
+                    </Text>
+                  </View>
+                )}
+                
+                <View style={styles.detailItem}>
+                  <MaterialCommunityIcons 
+                    name="email-outline" 
+                    size={14} 
+                    color={isDark ? '#aaa' : '#666'} 
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailText, { color: isDark ? '#aaa' : '#666' }]}>
+                    {item.email}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            
+            <IconButton
+              icon="chevron-right"
+              iconColor={isDark ? '#aaa' : '#999'}
+              size={24}
+              style={styles.arrowIcon}
+              onPress={() => handleEmployeePress(item)}
+            />
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#121212' : '#f5f5f5' }]}>
-      <View style={[styles.header, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}>
+    <LinearGradient
+      colors={isDark ? ['#121212', '#1a1a1a'] : ['#f5f5f5', '#e5e5e5']}
+      style={styles.container}
+    >
+      <LinearGradient
+        colors={isDark ? ['#1c1c1e', '#252527'] : ['#ffffff', '#f9f9f9']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <Text style={[styles.headerTitle, { color: isDark ? '#ffffff' : '#222222' }]}>
+            Сотрудники
+          </Text>
+          
+          <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity 
+              style={[styles.headerButton, { marginRight: 8 }]}
+              onPress={() => Alert.alert(
+                'Сбросить список',
+                'Вы уверены, что хотите сбросить список сотрудников к исходному?',
+                [
+                  { text: 'Отмена', style: 'cancel' },
+                  { text: 'Сбросить', onPress: resetToDefaultEmployees, style: 'destructive' }
+                ]
+              )}
+            >
+              <MaterialCommunityIcons name="refresh" size={24} color={isDark ? Colors.dark.tint : Colors.light.tint} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={() => setAddDialogVisible(true)}
+            >
+              <MaterialCommunityIcons name="account-plus" size={24} color={isDark ? Colors.dark.tint : Colors.light.tint} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
         <Searchbar
           placeholder="Поиск сотрудников..."
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={styles.searchBar}
-          inputStyle={{ color: isDark ? Colors.dark.text : Colors.light.text }}
+          style={[
+            styles.searchBar,
+            isDark ? styles.searchBarDark : styles.searchBarLight
+          ]}
+          inputStyle={[
+            styles.searchInput,
+            isDark ? styles.searchInputDark : styles.searchInputLight
+          ]}
           iconColor={isDark ? '#999' : '#666'}
-          placeholderTextColor={isDark ? '#999' : '#666'}
+          placeholderTextColor={isDark ? '#888' : '#999'}
         />
-      </View>
+      </LinearGradient>
 
-      <View style={[styles.filterContainer, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}>
+      <View style={styles.filterContainer}>
         <SegmentedButtons
           value={selectedFilter}
           onValueChange={setSelectedFilter}
           buttons={[
-            { value: 'all', label: 'Все' },
-            { value: UserRole.EMPLOYEE, label: 'Сотрудники' },
-            { value: UserRole.MANAGER, label: 'Менеджеры' },
-            { value: UserRole.ADMIN, label: 'Админы' },
+            { value: 'all', label: 'Все', icon: 'account-group' },
+            { value: UserRole.EMPLOYEE, label: 'Сотрудники', icon: 'account' },
+            { value: UserRole.MANAGER, label: 'Менеджеры', icon: 'account-tie' },
+            { value: UserRole.ADMIN, label: 'Админы', icon: 'shield-account' },
           ]}
           style={styles.segmentedButtons}
         />
@@ -259,59 +549,47 @@ export default function EmployeesScreen() {
       
       <FlatList
         data={filteredEmployees}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.employeeItem, { backgroundColor: isDark ? '#1e1e1e' : '#ffffff' }]}
-            onPress={() => handleEmployeePress(item)}
-          >
-            <View style={styles.employeeHeader}>
-              <Avatar.Image
-                source={{ uri: item.avatarUrl }}
-                size={50}
-              />
-              <View style={styles.employeeInfo}>
-                <Text style={[styles.employeeName, { color: isDark ? Colors.dark.text : '#333' }]}>{item.name}</Text>
-                <Text style={[styles.employeeEmail, { color: isDark ? '#aaa' : '#666' }]}>{item.email}</Text>
-                {item.position && (
-                  <Text style={[styles.employeePosition, { color: isDark ? '#aaa' : '#666' }]}>{item.position}</Text>
-                )}
-              </View>
-            </View>
-            
-            <View style={styles.employeeFooter}>
-              <Chip 
-                style={[styles.roleChip, { backgroundColor: getRoleColor(item.role) }]}
-                textStyle={{ color: 'white' }}
-              >
-                {getRoleText(item.role)}
-              </Chip>
-              
-              {item.department && (
-                <Chip style={[styles.departmentChip, { backgroundColor: isDark ? '#333' : '#e0e0e0' }]}>
-                  {item.department}
-                </Chip>
-              )}
-            </View>
-          </TouchableOpacity>
-        )}
+        renderItem={renderEmployeeItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.employeesList}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={onRefresh}
-            colors={['#2196F3']}
+            colors={[isDark ? Colors.dark.tint : Colors.light.tint]}
+            tintColor={isDark ? Colors.dark.tint : Colors.light.tint}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="account-search" size={64} color={isDark ? '#555' : '#ccc'} />
-            <Text style={[styles.emptyText, { color: isDark ? '#888' : '#666' }]}>Сотрудники не найдены</Text>
+            <LinearGradient
+              colors={isDark ? ['#2c2c2e', '#1c1c1e'] : ['#f0f0f0', '#e0e0e0']}
+              style={styles.emptyIconContainer}
+            >
+              <MaterialCommunityIcons 
+                name="account-search" 
+                size={44} 
+                color={isDark ? Colors.dark.tint : Colors.light.tint} 
+              />
+            </LinearGradient>
+            <Text style={[styles.emptyText, isDark ? styles.emptyTextDark : styles.emptyTextLight]}>
+              {searchQuery.trim() ? 
+                'Сотрудники не найдены, измените запрос поиска' : 
+                'Список сотрудников пуст'}
+            </Text>
+            <Button 
+              mode="contained" 
+              onPress={() => setAddDialogVisible(true)}
+              style={styles.emptyButton}
+              buttonColor={isDark ? Colors.dark.tint : Colors.light.tint}
+              icon="account-plus"
+            >
+              Добавить сотрудника
+            </Button>
           </View>
         }
       />
       
-      {/* Диалоги и FAB */}
       <Portal>
         <Dialog
           visible={detailDialogVisible}
@@ -323,45 +601,44 @@ export default function EmployeesScreen() {
               <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>Информация о сотруднике</Dialog.Title>
               <Dialog.Content>
                 <View style={styles.dialogAvatarContainer}>
-                  <Avatar.Image
-                    source={{ uri: selectedEmployee.avatarUrl }}
-                    size={80}
-                  />
-                </View>
-                
-                <View style={styles.dialogSection}>
-                  <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Имя</Text>
-                  <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.name}</Text>
-                </View>
-                
-                <View style={styles.dialogSection}>
-                  <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Email</Text>
-                  <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.email}</Text>
-                </View>
-                
-                <View style={styles.dialogSection}>
-                  <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Роль</Text>
-                  <Chip 
-                    style={[styles.dialogChip, { backgroundColor: getRoleColor(selectedEmployee.role) }]}
-                    textStyle={{ color: 'white' }}
+                  <LinearGradient
+                    colors={getDepartmentColor(selectedEmployee.department || 'Разработка')}
+                    style={styles.dialogAvatarBorder}
                   >
-                    {getRoleText(selectedEmployee.role)}
-                  </Chip>
+                    <Image
+                      source={{ uri: selectedEmployee.avatarUrl }}
+                      style={styles.dialogAvatar}
+                    />
+                  </LinearGradient>
+                  <Text style={[styles.dialogName, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.name}</Text>
+                  <LinearGradient
+                    colors={getRoleGradient(selectedEmployee.role)}
+                    style={styles.dialogRoleChip}
+                  >
+                    <Text style={styles.dialogRoleText}>{getRoleText(selectedEmployee.role)}</Text>
+                  </LinearGradient>
                 </View>
                 
-                {selectedEmployee.department && (
-                  <View style={styles.dialogSection}>
-                    <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Отдел</Text>
-                    <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.department}</Text>
+                <View style={styles.dialogInfoContainer}>
+                  <View style={styles.dialogInfoItem}>
+                    <MaterialCommunityIcons name="email" size={22} color={isDark ? Colors.dark.tint : Colors.light.tint} />
+                    <Text style={[styles.dialogInfoText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.email}</Text>
                   </View>
-                )}
-                
-                {selectedEmployee.position && (
-                  <View style={styles.dialogSection}>
-                    <Text style={[styles.dialogSectionTitle, { color: isDark ? '#aaa' : '#666' }]}>Должность</Text>
-                    <Text style={[styles.dialogText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.position}</Text>
-                  </View>
-                )}
+                  
+                  {selectedEmployee.department && (
+                    <View style={styles.dialogInfoItem}>
+                      <MaterialCommunityIcons name="office-building" size={22} color={isDark ? Colors.dark.tint : Colors.light.tint} />
+                      <Text style={[styles.dialogInfoText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.department}</Text>
+                    </View>
+                  )}
+                  
+                  {selectedEmployee.position && (
+                    <View style={styles.dialogInfoItem}>
+                      <MaterialCommunityIcons name="briefcase" size={22} color={isDark ? Colors.dark.tint : Colors.light.tint} />
+                      <Text style={[styles.dialogInfoText, { color: isDark ? Colors.dark.text : '#333' }]}>{selectedEmployee.position}</Text>
+                    </View>
+                  )}
+                </View>
               </Dialog.Content>
               <Dialog.Actions>
                 <Button onPress={() => setDetailDialogVisible(false)}>Закрыть</Button>
@@ -409,48 +686,170 @@ export default function EmployeesScreen() {
         >
           <Dialog.Title style={{ color: isDark ? Colors.dark.text : '#333' }}>Добавить сотрудника</Dialog.Title>
           <Dialog.Content>
-            <TextInput
-              label="Имя и фамилия *"
-              value={newEmployee.name}
-              onChangeText={(text) => setNewEmployee({ ...newEmployee, name: text })}
-              style={styles.input}
-              mode="outlined"
-            />
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: isDark ? '#aaa' : '#666' }]}>Имя и фамилия *</Text>
+              <RNTextInput
+                style={[
+                  styles.textInput,
+                  { 
+                    backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
+                    color: isDark ? '#fff' : '#333',
+                    borderColor: isDark ? '#444' : '#ddd'
+                  }
+                ]}
+                value={newEmployee.name}
+                onChangeText={(text) => setNewEmployee({ ...newEmployee, name: text })}
+                placeholder="Введите имя и фамилию"
+                placeholderTextColor={isDark ? '#888' : '#999'}
+              />
+            </View>
             
-            <TextInput
-              label="Email *"
-              value={newEmployee.email}
-              onChangeText={(text) => setNewEmployee({ ...newEmployee, email: text })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              mode="outlined"
-            />
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: isDark ? '#aaa' : '#666' }]}>Email *</Text>
+              <View style={styles.emailInputContainer}>
+                <RNTextInput
+                  style={[
+                    styles.textInput,
+                    { 
+                      backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5',
+                      color: isDark ? '#fff' : '#333',
+                      borderColor: isDark ? '#444' : '#ddd'
+                    }
+                  ]}
+                  value={newEmployee.email}
+                  onChangeText={(text) => setNewEmployee({ ...newEmployee, email: text })}
+                  placeholder="Введите email"
+                  placeholderTextColor={isDark ? '#888' : '#999'}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  onFocus={() => {
+                    if (newEmployee.name && !newEmployee.email) {
+                      setShowEmailSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    // Небольшая задержка перед скрытием, чтобы успеть нажать на подсказку
+                    setTimeout(() => setShowEmailSuggestions(false), 200);
+                  }}
+                />
+              </View>
+            </View>
             
-            <TextInput
-              label="Отдел"
-              value={newEmployee.department}
-              onChangeText={(text) => setNewEmployee({ ...newEmployee, department: text })}
-              style={styles.input}
-              mode="outlined"
-            />
+            {showEmailSuggestions && newEmployee.name && (
+              <View style={[
+                styles.emailSuggestions,
+                { 
+                  backgroundColor: isDark ? '#252527' : '#f5f5f5',
+                  borderColor: isDark ? '#444' : '#ddd'
+                }
+              ]}>
+                <View style={styles.emailSuggestionsHeader}>
+                  <Text style={{ 
+                    color: isDark ? '#aaa' : '#666', 
+                    fontWeight: 'bold',
+                    fontSize: 13
+                  }}>
+                    Рекомендуемые email:
+                  </Text>
+                </View>
+                
+                <ScrollView style={styles.emailSuggestionsList}>
+                  {emailDomains.map((domain, index) => {
+                    const suggestedEmail = generateEmail(newEmployee.name, domain);
+                    return (
+                      <TouchableOpacity 
+                        key={index}
+                        style={[
+                          styles.emailSuggestionItem,
+                          { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
+                        ]}
+                        onPress={() => {
+                          setNewEmployee({ ...newEmployee, email: suggestedEmail });
+                          setShowEmailSuggestions(false);
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="email-outline"
+                          size={16}
+                          color={isDark ? Colors.dark.tint : Colors.light.tint}
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={{ color: isDark ? '#fff' : '#333', fontSize: 14 }}>
+                          {suggestedEmail}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
             
-            <TextInput
-              label="Должность"
-              value={newEmployee.position}
-              onChangeText={(text) => setNewEmployee({ ...newEmployee, position: text })}
-              style={styles.input}
-              mode="outlined"
-            />
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: isDark ? '#aaa' : '#666' }]}>Отдел</Text>
+              <View style={styles.selectContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.selectButton,
+                    { 
+                      borderColor: isDark ? '#444' : '#ddd',
+                      backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5' 
+                    }
+                  ]}
+                  onPress={() => setShowDepartmentDropdown(true)}
+                >
+                  <Text style={{ color: isDark ? '#fff' : '#333' }}>
+                    {newEmployee.department || "Выбрать отдел"}
+                  </Text>
+                  <MaterialCommunityIcons 
+                    name="chevron-down" 
+                    size={24} 
+                    color={isDark ? '#aaa' : '#666'} 
+                    style={styles.selectIcon}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: isDark ? '#aaa' : '#666' }]}>Должность</Text>
+              <View style={styles.selectContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.selectButton,
+                    { 
+                      borderColor: isDark ? '#444' : '#ddd',
+                      backgroundColor: isDark ? '#2c2c2e' : '#f5f5f5' 
+                    }
+                  ]}
+                  onPress={() => {
+                    if (newEmployee.department) {
+                      setShowPositionDropdown(true);
+                    } else {
+                      Alert.alert('Ошибка', 'Сначала выберите отдел');
+                    }
+                  }}
+                >
+                  <Text style={{ color: isDark ? '#fff' : '#333' }}>
+                    {newEmployee.position || "Выбрать должность"}
+                  </Text>
+                  <MaterialCommunityIcons 
+                    name="chevron-down" 
+                    size={24} 
+                    color={isDark ? '#aaa' : '#666'} 
+                    style={styles.selectIcon}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
             
             <Text style={[styles.roleLabel, { color: isDark ? '#aaa' : '#666' }]}>Роль:</Text>
             <SegmentedButtons
               value={newEmployee.role}
               onValueChange={(value) => setNewEmployee({ ...newEmployee, role: value as string })}
               buttons={[
-                { value: UserRole.EMPLOYEE, label: 'Сотрудник' },
-                { value: UserRole.MANAGER, label: 'Менеджер' },
-                { value: UserRole.ADMIN, label: 'Админ' },
+                { value: UserRole.EMPLOYEE, label: 'Сотрудник', icon: 'account' },
+                { value: UserRole.MANAGER, label: 'Менеджер', icon: 'account-tie' },
+                { value: UserRole.ADMIN, label: 'Админ', icon: 'shield-account' },
               ]}
             />
           </Dialog.Content>
@@ -461,132 +860,521 @@ export default function EmployeesScreen() {
         </Dialog>
       </Portal>
       
+      {/* Выпадающий список для выбора отдела */}
+      <Portal>
+        <Modal
+          visible={showDepartmentDropdown}
+          onDismiss={() => setShowDepartmentDropdown(false)}
+          transparent={true}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.dropdown, 
+              {
+                backgroundColor: isDark ? '#1e1e1e' : 'white',
+                borderColor: isDark ? '#444' : '#ddd'
+              }
+            ]}>
+              <View style={styles.dropdownHeader}>
+                <Text style={[styles.dropdownTitle, { color: isDark ? '#fff' : '#333' }]}>
+                  Выберите отдел
+                </Text>
+                <IconButton
+                  icon="close"
+                  size={20}
+                  onPress={() => setShowDepartmentDropdown(false)}
+                  iconColor={isDark ? '#fff' : '#333'}
+                />
+              </View>
+              
+              <ScrollView style={styles.dropdownList}>
+                {departments.map((dept, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.dropdownItem,
+                      newEmployee.department === dept && styles.dropdownItemSelected
+                    ]}
+                    onPress={() => {
+                      setNewEmployee({ 
+                        ...newEmployee, 
+                        department: dept,
+                        // Сбрасываем должность при смене отдела
+                        position: '' 
+                      });
+                      setShowDepartmentDropdown(false);
+                    }}
+                  >
+                    <LinearGradient
+                      colors={getDepartmentColor(dept)}
+                      style={styles.departmentIcon}
+                    >
+                      <MaterialCommunityIcons
+                        name="office-building"
+                        size={16}
+                        color="#fff"
+                      />
+                    </LinearGradient>
+                    <Text style={{ 
+                      color: isDark ? '#fff' : '#333',
+                      fontWeight: newEmployee.department === dept ? 'bold' : 'normal'
+                    }}>
+                      {dept}
+                    </Text>
+                    {newEmployee.department === dept && (
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={20}
+                        color={isDark ? Colors.dark.tint : Colors.light.tint}
+                        style={{ marginLeft: 'auto' }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </Portal>
+      
+      {/* Выпадающий список для выбора должности */}
+      <Portal>
+        <Modal
+          visible={showPositionDropdown}
+          onDismiss={() => setShowPositionDropdown(false)}
+          transparent={true}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.dropdown, 
+              {
+                backgroundColor: isDark ? '#1e1e1e' : 'white',
+                borderColor: isDark ? '#444' : '#ddd'
+              }
+            ]}>
+              <View style={styles.dropdownHeader}>
+                <Text style={[styles.dropdownTitle, { color: isDark ? '#fff' : '#333' }]}>
+                  Выберите должность
+                </Text>
+                <IconButton
+                  icon="close"
+                  size={20}
+                  onPress={() => setShowPositionDropdown(false)}
+                  iconColor={isDark ? '#fff' : '#333'}
+                />
+              </View>
+              
+              <ScrollView style={styles.dropdownList}>
+                {newEmployee.department && positions[newEmployee.department]?.map((pos, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.dropdownItem,
+                      newEmployee.position === pos && styles.dropdownItemSelected
+                    ]}
+                    onPress={() => {
+                      setNewEmployee({ ...newEmployee, position: pos });
+                      setShowPositionDropdown(false);
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="briefcase-outline"
+                      size={20}
+                      color={isDark ? '#aaa' : '#666'}
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text style={{ 
+                      color: isDark ? '#fff' : '#333',
+                      fontWeight: newEmployee.position === pos ? 'bold' : 'normal'
+                    }}>
+                      {pos}
+                    </Text>
+                    {newEmployee.position === pos && (
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={20}
+                        color={isDark ? Colors.dark.tint : Colors.light.tint}
+                        style={{ marginLeft: 'auto' }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </Portal>
+      
       <FAB
-        icon="plus"
-        style={styles.fab}
+        icon="account-plus"
+        label="Добавить"
+        style={[styles.fab, { backgroundColor: isDark ? Colors.dark.tint : Colors.light.tint }]}
         onPress={() => setAddDialogVisible(true)}
+        color="#fff"
       />
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+  },
+  header: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  searchBar: {
+    height: 40,
+    elevation: 0,
+    borderRadius: 10,
+  },
+  searchBarLight: {
+    backgroundColor: '#f0f0f0',
+  },
+  searchBarDark: {
+    backgroundColor: '#2c2c2e',
+  },
+  searchInput: {
+    fontSize: 14,
+  },
+  searchInputLight: {
+    color: '#333333',
+  },
+  searchInputDark: {
+    color: '#e0e0e0',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    elevation: 2,
-  },
-  searchBar: {
-    elevation: 0,
-  },
   filterContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    elevation: 1,
   },
   segmentedButtons: {
     marginBottom: 8,
   },
   employeesList: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 80, // Для FAB
+  },
+  employeeItemContainer: {
+    marginBottom: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   employeeItem: {
-    borderRadius: 8,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 8,
-    elevation: 1,
   },
   employeeHeader: {
     flexDirection: 'row',
-    marginBottom: 12,
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  avatarBorder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  statusIndicator: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: 'white',
+    bottom: 0,
+    right: 0,
   },
   employeeInfo: {
-    marginLeft: 16,
     flex: 1,
   },
   employeeName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
-  },
-  employeeEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  employeePosition: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  employeeFooter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    marginBottom: 6,
   },
   roleChip: {
-    marginRight: 8,
-    marginBottom: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 10,
   },
-  departmentChip: {
-    marginRight: 8,
-    marginBottom: 4,
-    backgroundColor: '#e0e0e0',
+  roleChipText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  emptyContainer: {
+  employeeDetails: {
+    marginTop: 4,
+  },
+  detailItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
+    marginBottom: 4,
   },
-  emptyText: {
-    color: '#666',
-    marginTop: 8,
-    fontSize: 16,
+  detailIcon: {
+    marginRight: 6,
+  },
+  detailText: {
+    fontSize: 14,
+  },
+  arrowIcon: {
+    marginLeft: 'auto',
   },
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
     bottom: 0,
-    backgroundColor: '#2196F3',
+  },
+  emptyContainer: {
+    flex: 1,
+    paddingTop: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyText: {
+    marginTop: 8,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontSize: 16,
+  },
+  emptyTextLight: {
+    color: '#666666',
+  },
+  emptyTextDark: {
+    color: '#cccccc',
+  },
+  emptyButton: {
+    paddingHorizontal: 16,
   },
   dialog: {
+    borderRadius: 16,
     maxHeight: '80%',
   },
   dialogAvatarContainer: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  dialogSection: {
-    marginBottom: 16,
+  dialogAvatarBorder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  dialogSectionTitle: {
+  dialogAvatar: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  dialogName: {
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 4,
-    color: '#666',
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  dialogText: {
+  dialogRoleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  dialogRoleText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  dialogInfoContainer: {
+    marginTop: 16,
+  },
+  dialogInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+    borderRadius: 10,
+  },
+  dialogInfoText: {
     fontSize: 16,
-    color: '#333',
-  },
-  dialogChip: {
-    alignSelf: 'flex-start',
+    marginLeft: 12,
   },
   input: {
     marginBottom: 16,
   },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  textInput: {
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 16,
+  },
   roleLabel: {
     marginBottom: 8,
     fontWeight: 'bold',
-    color: '#666',
+  },
+  selectContainer: {
+    position: 'relative',
+  },
+  selectButton: {
+    height: 48,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+  },
+  selectIcon: {
+    position: 'absolute',
+    right: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 20,
+  },
+  dropdown: {
+    width: '90%',
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    maxHeight: '70%',
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.2)',
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  dropdownList: {
+    paddingVertical: 8,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dropdownItemSelected: {
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  departmentIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  emailInputContainer: {
+    position: 'relative',
+  },
+  emailSuggestions: {
+    position: 'absolute',
+    top: 120, // Позиционируем ниже поля ввода
+    left: 12,
+    right: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emailSuggestionsHeader: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(150, 150, 150, 0.2)',
+  },
+  emailSuggestionsList: {
+    maxHeight: 180,
+  },
+  emailSuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
   },
 }); 
