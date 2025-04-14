@@ -1,6 +1,6 @@
 import { useTheme } from '@/context/ThemeContext';
 
 export function useColorScheme() {
-  const { theme } = useTheme();
-  return theme;
+  const { isDark } = useTheme();
+  return isDark ? 'dark' : 'light';
 }

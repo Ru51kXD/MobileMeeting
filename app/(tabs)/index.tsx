@@ -1,29 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated } from 'react-native';
-import { Card, Button, FAB, Avatar } from 'react-native-paper';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Animated, Dimensions, Platform, Image, ImageBackground } from 'react-native';
+import { Card, Button, FAB, Avatar, Divider } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { useTask } from '../../context/TaskContext';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { Task, Meeting, UserRole, TaskStatus, TaskPriority } from '../../types/index';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { ThemedContainer } from '@/components/ThemedContainer';
-import { Colors } from '@/constants/Colors';
+import Colors from '@/constants/Colors';
 import { TaskSummary } from '@/components/tasks/TaskSummary';
 import { TeamSummary } from '@/components/team/TeamSummary';
-import { RecentChats } from '@/components/home/RecentChats';
+import RecentChats from '@/components/home/RecentChats';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { BlurView } from 'expo-blur';
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
-  { id: '1', name: 'Иванов Иван', position: 'Руководитель проекта', avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff' },
-  { id: '2', name: 'Петрова Елена', position: 'Ведущий дизайнер', avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff' },
-  { id: '3', name: 'Сидоров Алексей', position: 'Разработчик', avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff' },
-  { id: '4', name: 'Козлова Мария', position: 'Тестировщик', avatarUrl: 'https://ui-avatars.com/api/?name=Maria+Kozlova&background=6A1B9A&color=fff' },
-  { id: '5', name: 'Николаев Дмитрий', position: 'Бизнес-аналитик', avatarUrl: 'https://ui-avatars.com/api/?name=Dmitry+Nikolaev&background=00695C&color=fff' },
+  { 
+    id: '1', 
+    name: 'Иванов Иван', 
+    position: 'Руководитель проекта', 
+    avatarUrl: 'https://ui-avatars.com/api/?name=Ivan+Ivanov&background=0D8ABC&color=fff',
+    isOnline: true,
+    activeTasks: 5,
+    projects: 2,
+    efficiency: '89%'
+  },
+  { 
+    id: '2', 
+    name: 'Петрова Елена', 
+    position: 'Ведущий дизайнер', 
+    avatarUrl: 'https://ui-avatars.com/api/?name=Elena+Petrova&background=2E7D32&color=fff',
+    isOnline: true,
+    activeTasks: 3,
+    projects: 4,
+    efficiency: '94%'
+  },
+  { 
+    id: '3', 
+    name: 'Сидоров Алексей', 
+    position: 'Разработчик', 
+    avatarUrl: 'https://ui-avatars.com/api/?name=Alexey+Sidorov&background=C62828&color=fff',
+    isOnline: false,
+    activeTasks: 7,
+    projects: 1,
+    efficiency: '78%'
+  },
 ];
 
 // Временные примеры митингов
@@ -52,6 +79,28 @@ const DEMO_MEETINGS: Meeting[] = [
   },
 ];
 
+// Функция для создания волнистого фона
+const renderWavyBackground = (isDark: boolean) => {
+  return (
+    <View style={styles.backgroundContainer}>
+      <LinearGradient 
+        colors={isDark 
+          ? ['#191932', '#0D0D14', '#0D0D11'] 
+          : ['#f0f4ff', '#f0f4fd', '#f8f9ff']}
+        style={styles.meshBackground}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={[
+          styles.wavyPattern, 
+          { backgroundColor: isDark ? 'rgba(30, 30, 40, 0.3)' : 'rgba(255, 255, 255, 0.25)' }
+        ]} />
+      </LinearGradient>
+    </View>
+  );
+};
+
+// Главный компонент экрана
 export default function HomeScreen() {
   const { user } = useAuth();
   const { tasks, refreshTasks } = useTask();
@@ -59,28 +108,118 @@ export default function HomeScreen() {
   const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const { isDark } = useTheme();
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const { width, height } = Dimensions.get('window');
+  
+  // Состояние для эффекта пульсации
+  const [pulseAnim] = useState(new Animated.Value(0));
+  const [isAddButtonPressed, setIsAddButtonPressed] = useState(false);
 
-  // Анимированные значения для элементов
-  const [fadeAnims] = useState({
-    header: new Animated.Value(0),
-    welcomeCard: new Animated.Value(0),
-    taskSummary: new Animated.Value(0),
-    teamSummary: new Animated.Value(0),
-    recentChats: new Animated.Value(0)
+  // Анимации для элементов
+  const fadeAnims = {
+    header: useRef(new Animated.Value(0)).current,
+    content: useRef(new Animated.Value(0)).current,
+    fab: useRef(new Animated.Value(0)).current
+  };
+
+  const scaleAnims = {
+    header: useRef(new Animated.Value(0.95)).current,
+    content: useRef(new Animated.Value(0.95)).current,
+    fab: useRef(new Animated.Value(0.6)).current
+  };
+
+  // Анимация пульсации
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true
+        })
+      ])
+    );
+    
+    pulse.start();
+    
+    return () => pulse.stop();
+  }, []);
+
+  // Анимация при скролле
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [Platform.OS === 'ios' ? 150 : 130, Platform.OS === 'ios' ? 90 : 80],
+    extrapolate: 'clamp'
+  });
+
+  const headerTitleSize = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [28, 22],
+    extrapolate: 'clamp'
+  });
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 60, 90],
+    outputRange: [1, 0.8, 0],
+    extrapolate: 'clamp'
+  });
+
+  const dateOpacity = scrollY.interpolate({
+    inputRange: [0, 40, 70],
+    outputRange: [1, 0.3, 0],
+    extrapolate: 'clamp'
+  });
+  
+  // Параллакс эффект для фона
+  const backgroundTranslateY = scrollY.interpolate({
+    inputRange: [0, 300],
+    outputRange: [0, -100],
+    extrapolate: 'clamp'
   });
 
   // Анимация появления элементов
   useEffect(() => {
-    const animations = Object.values(fadeAnims).map((anim, index) =>
-      Animated.timing(anim, {
+    Animated.parallel([
+      Animated.timing(fadeAnims.header, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true
+      }),
+      Animated.timing(scaleAnims.header, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true
+      }),
+      Animated.timing(fadeAnims.content, {
+        toValue: 1,
+        duration: 1000,
+        delay: 300,
+        useNativeDriver: true
+      }),
+      Animated.timing(scaleAnims.content, {
+        toValue: 1,
+        duration: 1000,
+        delay: 300,
+        useNativeDriver: true
+      }),
+      Animated.timing(fadeAnims.fab, {
         toValue: 1,
         duration: 600,
-        delay: 100 * index,
+        delay: 800,
+        useNativeDriver: true
+      }),
+      Animated.timing(scaleAnims.fab, {
+        toValue: 1,
+        duration: 800,
+        delay: 800,
         useNativeDriver: true
       })
-    );
-    
-    Animated.stagger(100, animations).start();
+    ]).start();
   }, []);
 
   useEffect(() => {
@@ -143,422 +282,568 @@ export default function HomeScreen() {
   };
 
   const handleAddTask = () => {
-    router.push('/(tabs)/tasks/create');
+    // Анимация нажатия
+    setIsAddButtonPressed(true);
+    setTimeout(() => {
+      setIsAddButtonPressed(false);
+      router.push('/(tabs)/tasks/create');
+    }, 300);
   };
 
-  const handleGoToMeetings = () => {
-    router.push('/(tabs)/meetings');
-  };
-
-  const handleGoToTasks = () => {
-    router.push('/(tabs)/tasks');
-  };
-
-  const handleGoToProfile = () => {
-    router.push('/(tabs)/profile');
-  };
-
-  // Функция для получения данных сотрудника по ID
-  const getEmployeeById = (employeeId: string) => {
-    return DEMO_EMPLOYEES.find(employee => employee.id === employeeId) || 
-      { id: employeeId, name: 'Неизвестный сотрудник', position: 'Не указана', avatarUrl: 'https://ui-avatars.com/api/?name=Unknown&background=9E9E9E&color=fff' };
+  const navigateToChats = () => {
+    router.push('/(tabs)/chat/');
   };
 
   const navigateTo = (route: string) => {
     router.push(route);
   };
 
+  // Пульсирующая тень для FAB
+  const pulseScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.2]
+  });
+
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.5, 0]
+  });
+
   return (
-    <ThemedContainer style={[styles.container, {backgroundColor: isDark ? '#1c1c1e' : '#f8f8fa'}]}>
-      <Animated.View style={{opacity: fadeAnims.header}}>
-        <LinearGradient
-          colors={isDark ? ['#2c2c2e', '#1c1c1e'] : ['#ffffff', '#f8f8fa']}
-          style={styles.header}
-        >
-          <View style={styles.headerTextContainer}>
-            <Text style={[styles.headerTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
-              Рабочая панель
-            </Text>
-            <Text style={[styles.headerSubtitle, {color: isDark ? '#9a9a9a' : '#666666'}]}>
-              {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </Text>
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.profileButton}
-            onPress={() => navigateTo('/profile')}
-          >
-            <LinearGradient
-              colors={isDark ? ['#3a3a3c', '#2c2c2e'] : ['#ffffff', '#f2f2f7']}
-              style={styles.profileButtonGradient}
-            >
-              <FontAwesome name="user" size={18} color={isDark ? '#ffffff' : '#000000'} />
-            </LinearGradient>
-          </TouchableOpacity>
-        </LinearGradient>
+    <ThemedContainer style={[styles.container, {backgroundColor: isDark ? '#0D0D11' : '#f0f4fd'}]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      
+      {/* Анимированный фон */}
+      <Animated.View 
+        style={[
+          styles.backgroundContainer,
+          {
+            transform: [{ translateY: backgroundTranslateY }]
+          }
+        ]}
+      >
+        {renderWavyBackground(isDark)}
       </Animated.View>
       
-      <ScrollView
+      {/* Анимированная шапка */}
+      <Animated.View 
+        style={[
+          styles.headerContainer, 
+          { 
+            height: headerHeight,
+            backgroundColor: isDark ? 'rgba(20, 20, 28, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+          }
+        ]}
+      >
+        <BlurView
+          intensity={isDark ? 40 : 50}
+          tint={isDark ? 'dark' : 'light'}
+          style={styles.blurView}
+        >
+          <LinearGradient
+            colors={isDark 
+              ? ['rgba(97, 97, 255, 0.2)', 'rgba(79, 70, 229, 0.05)'] 
+              : ['rgba(97, 97, 255, 0.15)', 'rgba(255, 255, 255, 0.05)']}
+            style={styles.headerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Animated.View 
+              style={[
+                styles.headerContent,
+                {
+                  opacity: fadeAnims.header,
+                  transform: [{ scale: scaleAnims.header }]
+                }
+              ]}
+            >
+              <View style={styles.headerMain}>
+                <View>
+                  <Animated.Text 
+                    style={[
+                      styles.headerTitle, 
+                      { 
+                        color: isDark ? '#FFFFFF' : '#1E293B',
+                        fontSize: headerTitleSize
+                      }
+                    ]}
+                  >
+                    Рабочая панель
+                  </Animated.Text>
+                  <Animated.Text 
+                    style={[
+                      styles.headerDate, 
+                      { 
+                        color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(30, 41, 59, 0.7)',
+                        opacity: dateOpacity
+                      }
+                    ]}
+                  >
+                    {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </Animated.Text>
+                </View>
+
+                <TouchableOpacity 
+                  onPress={() => navigateTo('/profile')}
+                  style={styles.avatarContainer}
+                >
+                  {user?.avatarUrl ? (
+                    <Avatar.Image 
+                      source={{ uri: user.avatarUrl }} 
+                      size={48} 
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <Avatar.Text 
+                      label={user?.name?.substring(0, 2) || 'U'} 
+                      size={48} 
+                      style={styles.avatar}
+                      color="#FFF"
+                      labelStyle={{ fontWeight: 'bold' }}
+                    />
+                  )}
+                  
+                  {/* Индикатор онлайн-статуса */}
+                  <View style={styles.statusIndicator} />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Время в правом верхнем углу */}
+              <Animated.Text 
+                style={[
+                  styles.headerTime,
+                  {
+                    opacity: dateOpacity,
+                    color: isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(30, 41, 59, 0.9)',
+                  }
+                ]}
+              >
+                {format(new Date(), 'HH:mm', { locale: ru })}
+              </Animated.Text>
+            </Animated.View>
+          </LinearGradient>
+        </BlurView>
+      </Animated.View>
+
+      {/* Основной контент */}
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
       >
         <Animated.View 
           style={[
-            styles.cardContainer, 
+            styles.contentContainer,
             {
-              opacity: fadeAnims.welcomeCard,
-              transform: [{
-                translateY: fadeAnims.welcomeCard.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0]
-                })
-              }]
+              opacity: fadeAnims.content,
+              transform: [{ scale: scaleAnims.content }]
             }
           ]}
+        >
+          {/* Секция задач */}
+          <Animated.View
+            style={[
+              styles.sectionWrapper,
+              {
+                opacity: fadeAnims.content,
+                transform: [{ scale: scaleAnims.content }]
+              }
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <LinearGradient
+                  colors={isDark ? ['#4F46E5', '#6366F1'] : ['#6366F1', '#818CF8']}
+                  style={styles.iconBadge}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <MaterialIcons name="assignment" size={18} color="#FFFFFF" />
+                </LinearGradient>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                  Задачи
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.viewAllButton}
+                onPress={() => navigateTo('/(tabs)/tasks')}
+              >
+                <Text style={[styles.viewAllText, { color: isDark ? '#818CF8' : '#4F46E5' }]}>
+                  Все задачи
+                </Text>
+                <MaterialIcons name="chevron-right" size={16} color={isDark ? '#818CF8' : '#4F46E5'} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={[
+              styles.sectionCard,
+              { 
+                backgroundColor: isDark ? 'rgba(30, 30, 40, 0.6)' : 'rgba(255, 255, 255, 0.8)',
+                borderColor: isDark ? 'rgba(80, 70, 229, 0.2)' : 'rgba(99, 102, 241, 0.2)'
+              }
+            ]}>
+              <BlurView
+                intensity={isDark ? 20 : 40}
+                tint={isDark ? 'dark' : 'light'}
+                style={styles.blurView}
+              >
+                <View style={styles.glassContent}>
+                  <TaskSummary tasks={upcomingTasks} onViewTask={handleViewTask} />
+                </View>
+              </BlurView>
+            </View>
+          </Animated.View>
+          
+          {/* Секция команды */}
+          <Animated.View
+            style={[
+              styles.sectionWrapper,
+              {
+                opacity: fadeAnims.content,
+                transform: [{ scale: scaleAnims.content }]
+              }
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <LinearGradient
+                  colors={isDark ? ['#059669', '#10B981'] : ['#10B981', '#34D399']}
+                  style={styles.iconBadge}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <MaterialIcons name="people" size={18} color="#FFFFFF" />
+                </LinearGradient>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                  Команда
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.viewAllButton}
+                onPress={() => navigateTo('/(tabs)/employees')}
+              >
+                <Text style={[styles.viewAllText, { color: isDark ? '#10B981' : '#059669' }]}>
+                  Все сотрудники
+                </Text>
+                <MaterialIcons name="chevron-right" size={16} color={isDark ? '#10B981' : '#059669'} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={[
+              styles.sectionCard,
+              { 
+                backgroundColor: isDark ? 'rgba(30, 30, 40, 0.6)' : 'rgba(255, 255, 255, 0.8)',
+                borderColor: isDark ? 'rgba(5, 150, 105, 0.2)' : 'rgba(16, 185, 129, 0.2)'
+              }
+            ]}>
+              <BlurView
+                intensity={isDark ? 20 : 40}
+                tint={isDark ? 'dark' : 'light'}
+                style={styles.blurView}
+              >
+                <View style={styles.glassContent}>
+                  <TeamSummary employees={DEMO_EMPLOYEES} />
+                </View>
+              </BlurView>
+            </View>
+          </Animated.View>
+          
+          {/* Секция чатов */}
+          <Animated.View
+            style={[
+              styles.sectionWrapper,
+              {
+                opacity: fadeAnims.content,
+                transform: [{ scale: scaleAnims.content }]
+              }
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderLeft}>
+                <LinearGradient
+                  colors={isDark ? ['#DB2777', '#EC4899'] : ['#EC4899', '#F472B6']}
+                  style={styles.iconBadge}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <MaterialIcons name="chat" size={18} color="#FFFFFF" />
+                </LinearGradient>
+                <Text style={[styles.sectionTitle, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                  Сообщения
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.viewAllButton}
+                onPress={navigateToChats}
+              >
+                <Text style={[styles.viewAllText, { color: isDark ? '#EC4899' : '#DB2777' }]}>
+                  Все сообщения
+                </Text>
+                <MaterialIcons name="chevron-right" size={16} color={isDark ? '#EC4899' : '#DB2777'} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={[
+              styles.sectionCard,
+              { 
+                backgroundColor: isDark ? 'rgba(30, 30, 40, 0.6)' : 'rgba(255, 255, 255, 0.8)',
+                borderColor: isDark ? 'rgba(219, 39, 119, 0.2)' : 'rgba(236, 72, 153, 0.2)'
+              }
+            ]}>
+              <BlurView
+                intensity={isDark ? 20 : 40}
+                tint={isDark ? 'dark' : 'light'}
+                style={styles.blurView}
+              >
+                <View style={styles.glassContent}>
+                  <RecentChats onPress={navigateToChats} />
+                </View>
+              </BlurView>
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </Animated.ScrollView>
+
+      {/* Плавающая кнопка для добавления задачи */}
+      <Animated.View
+        style={[
+          styles.floatingButtonContainer,
+          {
+            opacity: fadeAnims.fab,
+            transform: [{ scale: scaleAnims.fab }]
+          }
+        ]}
+      >
+        {/* Пульсирующий эффект */}
+        <Animated.View
+          style={[
+            styles.pulseShadow,
+            {
+              transform: [{ scale: pulseScale }],
+              opacity: pulseOpacity
+            }
+          ]}
+        />
+        
+        <TouchableOpacity
+          style={[
+            styles.addButton,
+            isAddButtonPressed && styles.addButtonPressed
+          ]}
+          onPress={handleAddTask}
+          activeOpacity={0.85}
         >
           <LinearGradient
-            colors={isDark ? ['#0a84ff', '#0066cc'] : ['#007aff', '#0062cc']}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 1}}
-            style={styles.welcomeCard}
+            colors={['#4F46E5', '#6366F1', '#818CF8']}
+            style={styles.addButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
-            <View>
-              <Text style={styles.welcomeCardTitle}>
-                Привет, {user?.name || 'Пользователь'}!
-              </Text>
-              <Text style={styles.welcomeCardSubtitle}>
-                {user?.position || 'Добро пожаловать'}
-              </Text>
-            </View>
-            <View style={styles.welcomeCardStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>7</Text>
-                <Text style={styles.statLabel}>активных задач</Text>
-              </View>
-              <View style={styles.statDivider}></View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>85%</Text>
-                <Text style={styles.statLabel}>эффективность</Text>
-              </View>
-            </View>
+            <Feather name="plus" size={24} color="#FFFFFF" />
           </LinearGradient>
-        </Animated.View>
-        
-        <Animated.View 
-          style={[
-            styles.sectionContainer,
-            {
-              opacity: fadeAnims.taskSummary,
-              transform: [{
-                translateY: fadeAnims.taskSummary.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0]
-                })
-              }]
-            }
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <LinearGradient
-                colors={isDark ? ['#ff9500', '#ff6000'] : ['#ff9500', '#ff6000']}
-                style={styles.sectionIcon}
-              >
-                <FontAwesome name="tasks" size={18} color="#ffffff" />
-              </LinearGradient>
-              <Text style={[styles.sectionTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
-                Задачи
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => navigateTo('/tasks')}
-              style={styles.seeAllButton}
-            >
-              <Text style={[styles.seeAllText, {color: isDark ? '#0a84ff' : '#007aff'}]}>
-                Все задачи
-              </Text>
-              <FontAwesome name="angle-right" size={16} color={isDark ? '#0a84ff' : '#007aff'} />
-            </TouchableOpacity>
-          </View>
-          <TaskSummary />
-        </Animated.View>
-        
-        <Animated.View 
-          style={[
-            styles.sectionContainer,
-            {
-              opacity: fadeAnims.teamSummary,
-              transform: [{
-                translateY: fadeAnims.teamSummary.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0]
-                })
-              }]
-            }
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <LinearGradient
-                colors={isDark ? ['#5e5ce6', '#4b49b7'] : ['#5e5ce6', '#4b49b7']}
-                style={styles.sectionIcon}
-              >
-                <FontAwesome name="users" size={18} color="#ffffff" />
-              </LinearGradient>
-              <Text style={[styles.sectionTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
-                Команда
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => navigateTo('/team')}
-              style={styles.seeAllButton}
-            >
-              <Text style={[styles.seeAllText, {color: isDark ? '#0a84ff' : '#007aff'}]}>
-                Все сотрудники
-              </Text>
-              <FontAwesome name="angle-right" size={16} color={isDark ? '#0a84ff' : '#007aff'} />
-            </TouchableOpacity>
-          </View>
-          <TeamSummary />
-        </Animated.View>
-        
-        <Animated.View 
-          style={[
-            styles.sectionContainer,
-            {
-              opacity: fadeAnims.recentChats,
-              transform: [{
-                translateY: fadeAnims.recentChats.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0]
-                })
-              }]
-            }
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <LinearGradient
-                colors={isDark ? ['#4cd964', '#30ad4b'] : ['#34c759', '#248a3d']}
-                style={styles.sectionIcon}
-              >
-                <FontAwesome name="comments" size={18} color="#ffffff" />
-              </LinearGradient>
-              <Text style={[styles.sectionTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
-                Недавние чаты
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => navigateTo('/chat')}
-              style={styles.seeAllButton}
-            >
-              <Text style={[styles.seeAllText, {color: isDark ? '#0a84ff' : '#007aff'}]}>
-                Все чаты
-              </Text>
-              <FontAwesome name="angle-right" size={16} color={isDark ? '#0a84ff' : '#007aff'} />
-            </TouchableOpacity>
-          </View>
-          <RecentChats />
-        </Animated.View>
-      </ScrollView>
-
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={handleAddTask}
-        label="Новая задача"
-      />
+        </TouchableOpacity>
+      </Animated.View>
     </ThemedContainer>
   );
 }
 
-// Вспомогательные функции для стилей задач
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case TaskPriority.LOW:
-      return '#28a745';
-    case TaskPriority.MEDIUM:
-      return '#ffc107';
-    case TaskPriority.HIGH:
-      return '#fd7e14';
-    case TaskPriority.URGENT:
-      return '#dc3545';
-    default:
-      return '#6c757d';
-  }
-};
-
-const getStatusText = (status: TaskStatus) => {
-  switch (status) {
-    case TaskStatus.ASSIGNED:
-      return 'Назначена';
-    case TaskStatus.IN_PROGRESS:
-      return 'В процессе';
-    case TaskStatus.COMPLETED:
-      return 'Выполнена';
-    case TaskStatus.CANCELLED:
-      return 'Отменена';
-    default:
-      return '';
-  }
-};
-
-const getStatusColor = (status: TaskStatus) => {
-  switch (status) {
-    case TaskStatus.ASSIGNED:
-      return '#6c757d';
-    case TaskStatus.IN_PROGRESS:
-      return '#fd7e14';
-    case TaskStatus.COMPLETED:
-      return '#28a745';
-    case TaskStatus.CANCELLED:
-      return '#dc3545';
-    default:
-      return '#6c757d';
-  }
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
-  header: {
+  backgroundContainer: {
+    ...StyleSheet.absoluteFillObject,
+    height: Dimensions.get('window').height * 1.2,
+  },
+  meshBackground: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wavyPattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.6,
+  },
+  headerContainer: {
+    width: '100%',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 10,
+    zIndex: 10,
+  },
+  blurView: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 54 : 36,
+  },
+  headerContent: {
+    flex: 1,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    justifyContent: 'flex-end',
+    paddingBottom: 16,
+  },
+  headerMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  headerTextContainer: {
-    flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: 'bold',
     marginBottom: 4,
   },
-  headerSubtitle: {
+  headerDate: {
     fontSize: 14,
     fontWeight: '500',
   },
-  profileButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  headerTime: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 54 : 36,
+    right: 20,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  avatarContainer: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 5,
   },
-  profileButtonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+  avatar: {
+    backgroundColor: '#4F46E5',
+  },
+  statusIndicator: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    bottom: 0,
+    right: 0,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 100,
   },
-  cardContainer: {
-    padding: 16,
-  },
-  welcomeCard: {
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  welcomeCardTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  welcomeCardSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 20,
-  },
-  welcomeCardStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+  contentContainer: {
     paddingTop: 16,
+    paddingHorizontal: 16,
   },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  sectionContainer: {
-    marginHorizontal: 16,
-    marginTop: 16,
+  sectionWrapper: {
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    paddingHorizontal: 4,
   },
-  sectionTitleContainer: {
+  sectionHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  sectionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
+  iconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    marginRight: 8,
+    justifyContent: 'center',
+    marginRight: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
   },
-  seeAllButton: {
+  viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
   },
-  seeAllText: {
+  viewAllText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     marginRight: 4,
   },
-  fab: {
+  sectionCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+  },
+  glassContent: {
+    flex: 1,
+  },
+  floatingButtonContainer: {
     position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 80,
-    backgroundColor: '#1E88E5',
+    bottom: 24,
+    right: 24,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseShadow: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#4F46E5',
+  },
+  addButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  addButtonPressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  addButtonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

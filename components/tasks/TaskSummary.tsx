@@ -2,19 +2,27 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useTask } from '../../context/TaskContext';
-import { TaskStatus, TaskPriority } from '../../types/index';
+import { TaskStatus, TaskPriority, Task } from '../../types/index';
 import { router } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-export const TaskSummary = () => {
+interface TaskSummaryProps {
+  tasks?: Task[];
+  onViewTask?: (taskId: string) => void;
+}
+
+export const TaskSummary = ({ tasks: propTasks, onViewTask: propOnViewTask }: TaskSummaryProps) => {
   const { isDark } = useTheme();
-  const { tasks } = useTask();
+  const { tasks: contextTasks } = useTask();
+  
+  // Используем задачи из props, если они есть, иначе из контекста
+  const tasksToUse = propTasks || contextTasks;
   
   // Получаем активные задачи (не выполненные и не отмененные)
-  const activeTasks = tasks.filter(
+  const activeTasks = tasksToUse.filter(
     task => task.status !== TaskStatus.COMPLETED && task.status !== TaskStatus.CANCELLED
   ).slice(0, 3); // Берем первые 3 задачи
   
@@ -54,10 +62,14 @@ export const TaskSummary = () => {
   };
   
   const handleViewTask = (taskId: string) => {
-    router.push({
-      pathname: '/(tabs)/tasks',
-      params: { taskId }
-    });
+    if (propOnViewTask) {
+      propOnViewTask(taskId);
+    } else {
+      router.push({
+        pathname: '/(tabs)/tasks',
+        params: { taskId }
+      });
+    }
   };
   
   if (activeTasks.length === 0) {

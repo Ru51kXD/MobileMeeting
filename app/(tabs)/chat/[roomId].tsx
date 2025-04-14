@@ -223,6 +223,14 @@ export default function ChatRoomScreen() {
   const headerOpacity = useState(new Animated.Value(0))[0];
   const listTranslateY = useState(new Animated.Value(20))[0];
   
+  // Эффект для синхронизации сообщений с контекстом
+  useEffect(() => {
+    if (roomId) {
+      const updatedMessages = getMessagesForChat(roomId);
+      setChatMessages(updatedMessages);
+    }
+  }, [roomId, messages]);
+
   useEffect(() => {
     if (roomId) {
       // Находим информацию о текущей комнате чата

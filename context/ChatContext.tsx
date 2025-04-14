@@ -103,6 +103,14 @@ export const getEmployeeInfo = (userId: string): Employee => {
     };
 };
 
+// Функция для случайного обновления онлайн-статуса сотрудников
+export const randomizeEmployeesOnlineStatus = () => {
+  DEMO_EMPLOYEES.forEach(employee => {
+    // Генерируем случайное значение (true/false) для статуса онлайн
+    employee.isOnline = Math.random() > 0.5;
+  });
+};
+
 // Демо-данные для чатов
 const DEMO_CHAT_ROOMS: ChatRoom[] = [
   {
@@ -242,6 +250,11 @@ interface ChatContextType {
   refreshChatData: () => Promise<void>;
   resetAndRefreshChatData: () => Promise<void>;
   createGroupChat: (name: string, participants: string[]) => Promise<string>;
+  createChatForNewEmployee: (employeeId: string, employeeName: string, position: string, avatarUrl?: string) => Promise<string>;
+  createChatForMeeting: (meetingId: string, meetingTitle: string, participants: string[]) => Promise<string>;
+  randomizeOnlineStatus: () => void;
+  ensureChatsWithAllEmployees: () => Promise<void>;
+  addNewEmployee: (employee: Employee) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -295,12 +308,14 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
         // Создаем новый чат с полной информацией о сотруднике
         const newChat: ChatRoom = {
           id: `personal_${uniqueId}`,
-          name: `${employee.name} (${employee.position})`,
+          name: employee.name,
           isGroupChat: false,
           participants: [user.id, employee.id],
           createdAt: new Date(),
           updatedAt: new Date(),
-          lastMessage: welcomeMessage
+          lastMessage: welcomeMessage,
+          avatar: employee.avatarUrl,
+          isOnline: employee.isOnline,
         };
         
         updatedRooms.push(newChat);
@@ -733,6 +748,145 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
     }
   };
 
+  // Функция для создания чата для нового сотрудника
+  const createChatForNewEmployee = async (
+    employeeId: string, 
+    employeeName: string, 
+    position: string, 
+    avatarUrl?: string
+  ): Promise<string> => {
+    try {
+      if (!user) return '';
+      
+      // Создаем уникальный идентификатор для чата
+      const uniqueId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const newChatId = `personal_${uniqueId}`;
+      
+      // Создаем приветственное сообщение
+      const welcomeMessage: Message = {
+        id: `welcome_${uniqueId}`,
+        senderId: employeeId,
+        receiverId: user.id,
+        chatRoomId: newChatId,
+        content: createTextContent(`Привет! Я ${employeeName}, ${position}. Рад(а) знакомству!`),
+        timestamp: new Date(),
+        isRead: false
+      };
+      
+      // Создаем новый чат
+      const newChat: ChatRoom = {
+        id: newChatId,
+        name: employeeName,
+        isGroupChat: false,
+        participants: [user.id, employeeId],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastMessage: welcomeMessage,
+        avatar: avatarUrl,
+        isOnline: true, // По умолчанию, новые сотрудники онлайн
+      };
+      
+      // Обновляем списки чатов и сообщений
+      const updatedChats = [...chatRooms, newChat];
+      const updatedMessages = [...messages, welcomeMessage];
+      
+      setChatRooms(updatedChats);
+      setMessages(updatedMessages);
+      
+      await saveChatRooms(updatedChats);
+      await saveMessages(updatedMessages);
+      
+      return newChatId;
+    } catch (error) {
+      console.error('Ошибка при создании чата для нового сотрудника:', error);
+      return '';
+    }
+  };
+
+  // Функция для создания чата для новой встречи
+  const createChatForMeeting = async (meetingId: string, meetingTitle: string, participants: string[]): Promise<string> => {
+    try {
+      // Создаем групповой чат для встречи
+      const newChatId = `meeting_${meetingId}`;
+      
+      const newChat: ChatRoom = {
+        id: newChatId,
+        name: `Встреча: ${meetingTitle}`,
+        isGroupChat: true,
+        participants: participants,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Добавляем первое сообщение о создании встречи
+      const firstMessage: Omit<Message, 'id'> = {
+        senderId: participants[0], // Организатор встречи (первый в списке участников)
+        receiverId: null,
+        chatRoomId: newChatId,
+        content: {
+          type: MessageContentType.TEXT,
+          text: `Создана новая встреча: "${meetingTitle}". Используйте этот чат для обсуждения.`
+        },
+        timestamp: new Date(),
+        isRead: false
+      };
+      
+      // Обновляем списки чатов и сообщений
+      const updatedChats = [...chatRooms, newChat];
+      setChatRooms(updatedChats);
+      await saveChatRooms(updatedChats);
+      
+      // Добавляем первое сообщение
+      await addMessage(firstMessage);
+      
+      return newChatId;
+    } catch (error) {
+      console.error('Ошибка при создании чата для встречи:', error);
+      return '';
+    }
+  };
+
+  // Функция для рандомизации онлайн-статуса
+  const randomizeOnlineStatus = () => {
+    randomizeEmployeesOnlineStatus();
+  };
+
+  // Добавляем нового сотрудника и создаем с ним чат
+  const addNewEmployee = async (employee: Employee): Promise<void> => {
+    try {
+      // Добавляем сотрудника в массив сотрудников
+      DEMO_EMPLOYEES.push(employee);
+      
+      // Создаем чат с новым сотрудником
+      if (user) {
+        await createChatForNewEmployee(
+          employee.id, 
+          employee.name, 
+          employee.position, 
+          employee.avatarUrl
+        );
+      }
+    } catch (error) {
+      console.error('Ошибка при добавлении нового сотрудника:', error);
+    }
+  };
+
+  // Функция для проверки и создания чатов со всеми сотрудниками
+  const ensureChatsWithAllEmployees = async (): Promise<void> => {
+    try {
+      if (!user) return;
+      
+      // Используем функцию createPersonalChats для проверки и создания недостающих чатов
+      const updatedRooms = createPersonalChats(chatRooms);
+      
+      // Сохраняем обновленный список чатов
+      setChatRooms(updatedRooms);
+      await saveChatRooms(updatedRooms);
+    } catch (error) {
+      console.error('Ошибка при создании чатов со всеми сотрудниками:', error);
+    }
+  };
+
   return (
     <ChatContext.Provider 
       value={{ 
@@ -748,7 +902,12 @@ export const ChatProvider: React.FC<{children: React.ReactNode}> = ({ children }
         markMessageAsRead,
         refreshChatData,
         resetAndRefreshChatData,
-        createGroupChat
+        createGroupChat,
+        createChatForNewEmployee,
+        createChatForMeeting,
+        randomizeOnlineStatus,
+        ensureChatsWithAllEmployees,
+        addNewEmployee
       }}
     >
       {children}

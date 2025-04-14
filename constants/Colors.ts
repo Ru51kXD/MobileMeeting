@@ -207,3 +207,6 @@ export const Colors: ColorScheme = {
     }
   },
 };
+
+// Добавляем экспорт по умолчанию для совместимости с обоими способами импорта
+export default Colors;

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Image, TouchableOpacity, Switch, useColorScheme, Animated } from 'react-native';
-import { Avatar, Button, Divider, TextInput, Dialog, Portal, useTheme as usePaperTheme } from 'react-native-paper';
+import { Avatar, Button, Divider, TextInput, Dialog, Portal, useTheme as usePaperTheme, Card, Badge, Chip } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
+import { MaterialCommunityIcons, FontAwesome, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Colors } from '@/constants/Colors';
+import Colors from '@/constants/Colors';
 import { UserRole } from '../../types/index';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedContainer } from '@/components/ThemedContainer';

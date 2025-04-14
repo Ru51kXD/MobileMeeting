@@ -4,14 +4,27 @@ import { useTheme } from '../../context/ThemeContext';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Импортируем список сотрудников из контекста
-import { DEMO_EMPLOYEES } from '../../context/ChatContext';
+// Определим тип Employee
+interface Employee {
+  id: string;
+  name: string;
+  position: string;
+  avatarUrl: string;
+  isOnline?: boolean;
+  activeTasks?: number;
+  projects?: number;
+  efficiency?: string;
+}
 
-export const TeamSummary = () => {
+interface TeamSummaryProps {
+  employees: Employee[];
+}
+
+export const TeamSummary = ({ employees }: TeamSummaryProps) => {
   const { isDark } = useTheme();
   
   // Берем первые 3 сотрудника для отображения
-  const employees = DEMO_EMPLOYEES.slice(0, 3);
+  const displayedEmployees = employees.slice(0, 3);
   
   const handleViewEmployee = (employeeId: string) => {
     router.push({
@@ -20,7 +33,7 @@ export const TeamSummary = () => {
     });
   };
   
-  if (employees.length === 0) {
+  if (displayedEmployees.length === 0) {
     return (
       <LinearGradient
         colors={isDark ? ['#2c2c2e', '#252527'] : ['#ffffff', '#f8f8fa']}
@@ -35,7 +48,7 @@ export const TeamSummary = () => {
   
   return (
     <View style={styles.container}>
-      {employees.map((employee) => (
+      {displayedEmployees.map((employee) => (
         <TouchableOpacity
           key={employee.id}
           style={styles.employeeItem}
@@ -86,7 +99,7 @@ export const TeamSummary = () => {
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, {color: isDark ? '#ffffff' : '#000000'}]}>
-                  {employee.activeTasks}
+                  {employee.activeTasks || '0'}
                 </Text>
                 <Text style={[styles.statLabel, {color: isDark ? '#9a9a9a' : '#8e8e93'}]}>
                   Задач
@@ -95,7 +108,7 @@ export const TeamSummary = () => {
               
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, {color: isDark ? '#ffffff' : '#000000'}]}>
-                  {employee.projects}
+                  {employee.projects || '0'}
                 </Text>
                 <Text style={[styles.statLabel, {color: isDark ? '#9a9a9a' : '#8e8e93'}]}>
                   Проектов
@@ -104,7 +117,7 @@ export const TeamSummary = () => {
               
               <View style={styles.statItem}>
                 <Text style={[styles.statValue, {color: isDark ? '#ffffff' : '#000000'}]}>
-                  {employee.efficiency}
+                  {employee.efficiency || '0%'}
                 </Text>
                 <Text style={[styles.statLabel, {color: isDark ? '#9a9a9a' : '#8e8e93'}]}>
                   Эффект.

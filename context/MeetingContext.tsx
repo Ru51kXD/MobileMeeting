@@ -63,7 +63,7 @@ const MeetingContext = createContext<MeetingContextType | undefined>(undefined);
 
 export const MeetingProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-
+  
   useEffect(() => {
     loadMeetings();
   }, []);
@@ -102,9 +102,10 @@ export const MeetingProvider: React.FC<{children: React.ReactNode}> = ({ childre
 
   const addMeeting = async (meeting: Omit<Meeting, 'id'>) => {
     try {
+      const newMeetingId = Date.now().toString(); // Генерируем уникальный ID
       const newMeeting = {
         ...meeting,
-        id: Date.now().toString(), // Генерируем уникальный ID
+        id: newMeetingId,
         createdAt: new Date(),
         updatedAt: new Date()
       } as Meeting;
@@ -112,6 +113,9 @@ export const MeetingProvider: React.FC<{children: React.ReactNode}> = ({ childre
       const updatedMeetings = [...meetings, newMeeting];
       setMeetings(updatedMeetings);
       await saveMeetings(updatedMeetings);
+      
+      // Создание чата для встречи перенесено в компонент создания встречи
+      
     } catch (error) {
       console.error('Ошибка добавления встречи:', error);
     }

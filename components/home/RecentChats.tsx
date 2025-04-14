@@ -33,7 +33,11 @@ const DEMO_RECENT_CHATS = [
   },
 ];
 
-export function RecentChats() {
+interface RecentChatsProps {
+  onPress?: () => void;
+}
+
+const RecentChats: React.FC<RecentChatsProps> = ({ onPress }) => {
   const { isDark } = useTheme();
 
   const formatTimestamp = (date: Date) => {
@@ -53,7 +57,6 @@ export function RecentChats() {
   };
 
   const navigateToChat = (chatId: string) => {
-    // Навигация к чату
     router.push({
       pathname: '/(tabs)/chats/[id]',
       params: { id: chatId }
@@ -61,7 +64,11 @@ export function RecentChats() {
   };
 
   const navigateToAllChats = () => {
-    router.push('/(tabs)/chats');
+    if (onPress) {
+      onPress();
+    } else {
+      router.push('/(tabs)/chats');
+    }
   };
 
   return (
@@ -79,7 +86,15 @@ export function RecentChats() {
         {DEMO_RECENT_CHATS.map((chat) => (
           <TouchableOpacity
             key={chat.id}
-            style={styles.chatItem}
+            style={[
+              styles.chatItem,
+              {
+                borderLeftWidth: chat.unreadCount > 0 ? 3 : 0,
+                borderLeftColor: chat.unreadCount > 0 
+                  ? (isDark ? Colors.dark.tint : Colors.light.tint) 
+                  : 'transparent'
+              }
+            ]}
             onPress={() => navigateToChat(chat.id)}
           >
             <Image source={{ uri: chat.avatarUrl }} style={styles.avatar} />
@@ -120,7 +135,9 @@ export function RecentChats() {
       </Card.Actions>
     </Card>
   );
-}
+};
+
+export default RecentChats;
 
 const styles = StyleSheet.create({
   card: {
@@ -146,6 +163,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(150, 150, 150, 0.1)',
   },

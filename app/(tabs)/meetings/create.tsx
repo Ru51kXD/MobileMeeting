@@ -26,6 +26,7 @@ import {
 import { router } from 'expo-router';
 import { useAuth } from '../../../context/AuthContext';
 import { useMeeting } from '../../../context/MeetingContext';
+import { useChat } from '../../../context/ChatContext';
 import { Meeting } from '../../../types';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, addDays, addMinutes, parseISO, isValid } from 'date-fns';
@@ -43,6 +44,7 @@ const DEMO_EMPLOYEES = [
 export default function CreateMeetingScreen() {
   const { user } = useAuth();
   const { addMeeting } = useMeeting();
+  const { createChatForMeeting } = useChat();
   
   const [meeting, setMeeting] = useState<Partial<Meeting>>({
     title: '',
@@ -130,11 +132,21 @@ export default function CreateMeetingScreen() {
       
       // Добавляем встречу через контекст
       await addMeeting(finalMeeting);
+
+      // Создаем ID для новой встречи (см. как это сделано в addMeeting)
+      const newMeetingId = Date.now().toString();
+      
+      // Создаем чат для новой встречи
+      await createChatForMeeting(
+        newMeetingId,
+        finalMeeting.title,
+        [finalMeeting.organizer, ...finalMeeting.participants]
+      );
       
       // Уведомление об успешном создании
       Alert.alert(
         'Встреча создана',
-        'Встреча успешно добавлена в календарь',
+        'Встреча успешно добавлена в календарь и создан групповой чат для обсуждения',
         [
           {
             text: 'OK',
