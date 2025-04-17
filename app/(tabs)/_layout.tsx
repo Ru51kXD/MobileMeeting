@@ -30,6 +30,28 @@ const HomeTabIcon = ({ color, focused }) => {
   );
 };
 
+// Создаем красивую иконку для встреч
+const MeetingsTabIcon = ({ color, focused }) => {
+  return (
+    <View style={styles.iconContainer}>
+      {focused && (
+        <LinearGradient
+          colors={['#FF375F', '#CC2E4C']}
+          style={styles.activeIconBackground}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      )}
+      <MaterialCommunityIcons 
+        name="video-outline" 
+        size={26} 
+        color={focused ? '#FFFFFF' : color} 
+        style={focused ? styles.activeIcon : null}
+      />
+    </View>
+  );
+};
+
 export default function TabLayout() {
   const { isDark } = useTheme() || { isDark: false };
 
@@ -98,12 +120,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="meetings"
+        name="video-meetings"
         options={{
           title: 'Встречи',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="calendar-clock" size={size + 2} color={color} />
-          ),
+          tabBarIcon: (props) => <MeetingsTabIcon {...props} />,
+          tabBarActiveTintColor: '#FF375F',
         }}
       />
       <Tabs.Screen

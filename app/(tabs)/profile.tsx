@@ -6,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { MaterialCommunityIcons, FontAwesome, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
-import { UserRole } from '../../types/index';
+import { UserRole, User, Meeting } from '../../types/index';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedContainer } from '@/components/ThemedContainer';
 
@@ -44,6 +44,43 @@ export default function ProfileScreen() {
     projectsCard: new Animated.Value(0),
     settingsCard: new Animated.Value(0)
   });
+
+  // Добавляем тестовые встречи
+  const [meetings, setMeetings] = useState<Meeting[]>([
+    {
+      id: '1',
+      title: 'Еженедельное совещание команды',
+      description: 'Обсуждение текущих задач и планов на неделю',
+      startTime: new Date(Date.now() + 1000 * 60 * 60 * 2), // Через 2 часа
+      endTime: new Date(Date.now() + 1000 * 60 * 60 * 3), // Через 3 часа
+      organizer: '1',
+      participants: ['1', '2', '3'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: '2',
+      title: 'Встреча с заказчиком',
+      description: 'Демонстрация прогресса по проекту',
+      startTime: new Date(Date.now() + 1000 * 60 * 60 * 24), // Через 1 день
+      endTime: new Date(Date.now() + 1000 * 60 * 60 * 25), // Через 1 день и 1 час
+      organizer: '2',
+      participants: ['1', '2'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: '3',
+      title: 'Мозговой штурм по новому проекту',
+      description: 'Разработка концепции и планирование архитектуры',
+      startTime: new Date(Date.now() + 1000 * 60 * 60 * 48), // Через 2 дня
+      endTime: new Date(Date.now() + 1000 * 60 * 60 * 50), // Через 2 дня и 2 часа
+      organizer: '1',
+      participants: ['1', '3'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]);
 
   // Обновляем локальное состояние при изменении глобальной темы
   useEffect(() => {
@@ -180,6 +217,55 @@ export default function ProfileScreen() {
     
     Animated.stagger(150, animations).start();
   }, []);
+
+  // Функция для присоединения к встрече
+  const handleJoinMeeting = (meeting: Meeting) => {
+    Alert.alert(
+      'Присоединение к встрече',
+      `Вы хотите присоединиться к встрече "${meeting.title}"?`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { 
+          text: 'Присоединиться', 
+          onPress: () => {
+            // Здесь должен быть код для запуска видеозвонка
+            // В демо-версии просто показываем уведомление
+            Alert.alert('Успешно', `Вы присоединились к встрече ${meeting.title}`, [
+              { text: 'OK' }
+            ]);
+          } 
+        }
+      ]
+    );
+  };
+
+  // Форматирование даты для отображения
+  const formatMeetingTime = (date: Date | string) => {
+    const meetingDate = new Date(date);
+    return meetingDate.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // Форматирование даты для отображения
+  const formatMeetingDate = (date: Date | string) => {
+    const meetingDate = new Date(date);
+    return meetingDate.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long'
+    });
+  };
+
+  // Проверка, сегодня ли встреча
+  const isMeetingToday = (date: Date | string) => {
+    const meetingDate = new Date(date);
+    const today = new Date();
+    return meetingDate.getDate() === today.getDate() &&
+      meetingDate.getMonth() === today.getMonth() &&
+      meetingDate.getFullYear() === today.getFullYear();
+  };
 
   if (!user) {
     return (
@@ -418,6 +504,101 @@ export default function ProfileScreen() {
                 </View>
               ))}
             </View>
+          </LinearGradient>
+        </Animated.View>
+        
+        {/* Добавляем карточку встреч */}
+        <Animated.View style={{
+          opacity: fadeAnims.projectsCard,
+          transform: [{
+            translateY: fadeAnims.projectsCard.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })
+          }]
+        }}>
+          <LinearGradient
+            colors={isDark ? ['#2c2c2e', '#252527'] : ['#ffffff', '#f8f8fa']}
+            style={styles.meetingsCard}
+          >
+            <View style={styles.cardHeader}>
+              <LinearGradient
+                colors={isDark ? ['#ff375f', '#cc2e4c'] : ['#ff375f', '#cc2e4c']}
+                style={styles.cardIcon}
+              >
+                <FontAwesome name="video-camera" size={16} color="#ffffff" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
+                Предстоящие встречи
+              </Text>
+              <View style={styles.meetingsCount}>
+                <Text style={styles.meetingsCountText}>{meetings.length}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.meetingsList}>
+              {meetings.map((meeting, index) => (
+                <View key={index} style={styles.meetingItem}>
+                  <View style={styles.meetingHeader}>
+                    <View style={styles.meetingTimeContainer}>
+                      <LinearGradient
+                        colors={isDark ? 
+                          ['rgba(80, 80, 100, 0.3)', 'rgba(60, 60, 80, 0.5)'] : 
+                          ['rgba(240, 240, 250, 0.5)', 'rgba(220, 220, 240, 0.7)']}
+                        style={styles.meetingTimeGradient}
+                      >
+                        <Text style={[styles.meetingDate, {color: isDark ? '#ffffff' : '#000000'}]}>
+                          {isMeetingToday(meeting.startTime) ? 'Сегодня' : formatMeetingDate(meeting.startTime)}
+                        </Text>
+                        <Text style={[styles.meetingTime, {color: isDark ? '#ff375f' : '#ff2d55'}]}>
+                          {formatMeetingTime(meeting.startTime)} - {formatMeetingTime(meeting.endTime)}
+                        </Text>
+                      </LinearGradient>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.joinMeetingButton} 
+                      onPress={() => handleJoinMeeting(meeting)}
+                    >
+                      <LinearGradient
+                        colors={isDark ? ['#ff375f', '#cc2e4c'] : ['#ff375f', '#cc2e4c']}
+                        style={styles.joinMeetingGradient}
+                      >
+                        <Text style={styles.joinMeetingText}>Присоединиться</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={[styles.meetingTitle, {color: isDark ? '#ffffff' : '#000000'}]}>
+                    {meeting.title}
+                  </Text>
+                  {meeting.description && (
+                    <Text style={[styles.meetingDescription, {color: isDark ? '#9a9a9a' : '#666666'}]}>
+                      {meeting.description}
+                    </Text>
+                  )}
+                  <View style={styles.meetingParticipants}>
+                    <Text style={[styles.participantsLabel, {color: isDark ? '#9a9a9a' : '#666666'}]}>
+                      Участники: {meeting.participants.length}
+                    </Text>
+                  </View>
+                  {index < meetings.length - 1 && <View style={[styles.meetingDivider, {backgroundColor: isDark ? 'rgba(142, 142, 147, 0.1)' : 'rgba(142, 142, 147, 0.2)'}]} />}
+                </View>
+              ))}
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.allMeetingsButton} 
+              onPress={() => router.push('/(tabs)/video-meetings')}
+            >
+              <LinearGradient
+                colors={isDark ? ['rgba(255, 55, 95, 0.2)', 'rgba(255, 55, 95, 0.1)'] : ['rgba(255, 55, 95, 0.2)', 'rgba(255, 55, 95, 0.1)']}
+                style={styles.allMeetingsGradient}
+              >
+                <Text style={[styles.allMeetingsText, {color: isDark ? '#ff375f' : '#ff2d55'}]}>
+                  Все встречи
+                </Text>
+                <FontAwesome name="angle-right" size={16} color={isDark ? '#ff375f' : '#ff2d55'} />
+              </LinearGradient>
+            </TouchableOpacity>
           </LinearGradient>
         </Animated.View>
         
@@ -821,6 +1002,109 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  meetingsCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  meetingsCount: {
+    backgroundColor: 'rgba(255, 45, 85, 0.15)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  meetingsCountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF2D55',
+  },
+  meetingsList: {
+    marginTop: 8,
+  },
+  meetingItem: {
+    marginBottom: 12,
+  },
+  meetingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  meetingTimeContainer: {
+    flex: 1,
+    marginRight: 10,
+  },
+  meetingTimeGradient: {
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  meetingDate: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  meetingTime: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  meetingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  meetingDescription: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  meetingParticipants: {
+    marginTop: 4,
+  },
+  participantsLabel: {
+    fontSize: 12,
+  },
+  meetingDivider: {
+    height: 1,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  joinMeetingButton: {
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  joinMeetingGradient: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  joinMeetingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  allMeetingsButton: {
+    marginTop: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  allMeetingsGradient: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  allMeetingsText: {
+    fontSize: 14,
     fontWeight: '600',
   },
 }); 
