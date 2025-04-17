@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions, ScrollView, Alert } from 'react-native';
 import { Searchbar, FAB, Chip, Menu, Divider, Button, ActivityIndicator, Dialog, Portal, Avatar } from 'react-native-paper';
 import { useAuth } from '../../../context/AuthContext';
 import { useTask } from '../../../context/TaskContext';
@@ -24,7 +24,7 @@ const DEMO_EMPLOYEES = [
 
 export default function TasksScreen() {
   const { user } = useAuth();
-  const { tasks: allTasks, refreshTasks, updateTask } = useTask();
+  const { tasks: allTasks, refreshTasks, updateTask, deleteTask } = useTask();
   const { isDark } = useTheme();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -430,9 +430,48 @@ export default function TasksScreen() {
     }
   };
 
+  // Функция для перехода на экран редактирования задачи
+  const goToEditTask = (task: Task) => {
+    router.push({
+      pathname: '/(tabs)/tasks/create',
+      params: { taskId: task.id }
+    });
+  };
+
   // Функция для перехода на экран создания задачи
   const goToCreateTask = () => {
     router.push('/(tabs)/tasks/create');
+  };
+
+  // Функция для удаления задачи
+  const handleDeleteTask = async (task: Task) => {
+    if (!task) return;
+
+    Alert.alert(
+      'Удаление задачи',
+      'Вы уверены, что хотите удалить эту задачу? Это действие нельзя отменить.',
+      [
+        {
+          text: 'Отмена',
+          style: 'cancel',
+        },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTask(task.id);
+              setTaskDetailVisible(false);
+              // После удаления обновляем список задач
+              await refreshTasks();
+            } catch (error) {
+              console.error('Ошибка при удалении задачи:', error);
+              Alert.alert('Ошибка', 'Не удалось удалить задачу. Попробуйте еще раз.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -726,91 +765,82 @@ export default function TasksScreen() {
             <>
               <Dialog.Title style={dynamicStyles.dialogTitle}>{selectedTask.title}</Dialog.Title>
               <Dialog.Content>
-                {selectedTask.description && (
-                  <Text style={[styles.dialogDescription, dynamicStyles.dialogDescription]}>
-                    {selectedTask.description}
-                  </Text>
-                )}
+                <Text style={[styles.dialogDescription, dynamicStyles.dialogDescription]}>
+                  {selectedTask.description}
+                </Text>
                 
-                <View style={styles.dialogSection}>
-                  <Text style={dynamicStyles.dialogLabel}>
-                    Статус:
-                  </Text>
-                  <View style={styles.statusChipContainer}>
-                    <LinearGradient
-                      colors={[getTaskStatusColor(selectedTask.status) + '40', getTaskStatusColor(selectedTask.status) + '20']}
-                      style={styles.statusChipGradient}
-                    >
-                      <Text style={[styles.statusChipText, { color: getTaskStatusColor(selectedTask.status) }]}>
-                        {getTaskStatusText(selectedTask.status)}
-                      </Text>
-                    </LinearGradient>
-                  </View>
-                </View>
+                {/* Определяем isPastDeadline для использования в диалоге */}
+                {(() => {
+                  const isPastDeadline = new Date(selectedTask.deadline) < new Date() && 
+                                        selectedTask.status !== TaskStatus.COMPLETED &&
+                                        selectedTask.status !== TaskStatus.CANCELLED;
+                  
+                  return (
+                    <>
+                      <View style={styles.dialogSection}>
+                        <Text style={dynamicStyles.dialogLabel}>Срок выполнения:</Text>
+                        <Text style={{ color: isPastDeadline ? '#dc3545' : (isDark ? '#aaa' : '#666') }}>
+                          {formatDate(selectedTask.deadline)}
+                          {isPastDeadline && ' (Просрочено)'}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.dialogSection}>
+                        <Text style={dynamicStyles.dialogLabel}>Приоритет:</Text>
+                        <View style={[
+                          styles.statusChipContainer,
+                          { backgroundColor: getTaskPriorityColor(selectedTask.priority) + '20' }
+                        ]}>
+                          <Text style={{ color: getTaskPriorityColor(selectedTask.priority), fontWeight: '500' }}>
+                            {selectedTask.priority}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.dialogSection}>
+                        <Text style={dynamicStyles.dialogLabel}>Статус:</Text>
+                        <View style={[
+                          styles.statusChipContainer,
+                          { backgroundColor: getTaskStatusColor(selectedTask.status) + '20' }
+                        ]}>
+                          <Text style={{ color: getTaskStatusColor(selectedTask.status), fontWeight: '500' }}>
+                            {getTaskStatusText(selectedTask.status)}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.dialogSection}>
+                        <Text style={dynamicStyles.dialogLabel}>Ответственный:</Text>
+                        <View style={styles.assigneeDialogContainer}>
+                          <Avatar.Image 
+                            size={32} 
+                            source={{ uri: getEmployeeById(selectedTask.assignedTo)?.avatarUrl }}
+                            style={{ marginRight: 12 }}
+                          />
+                          <View>
+                            <Text style={[styles.assigneeDialogName, { color: isDark ? Colors.dark.text : '#333' }]}>
+                              {getEmployeeById(selectedTask.assignedTo)?.name}
+                            </Text>
+                            <Text style={[styles.assigneeDialogPosition, { color: isDark ? '#aaa' : '#666' }]}>
+                              {getEmployeeById(selectedTask.assignedTo)?.position}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </>
+                  );
+                })()}
                 
-                <View style={styles.dialogSection}>
-                  <Text style={dynamicStyles.dialogLabel}>
-                    Приоритет:
-                  </Text>
-                  <View style={styles.priorityChipContainer}>
-                    <LinearGradient
-                      colors={[getTaskPriorityColor(selectedTask.priority) + '40', getTaskPriorityColor(selectedTask.priority) + '20']}
-                      style={styles.priorityChipGradient}
-                    >
-                      <Text style={[styles.priorityChipText, { color: getTaskPriorityColor(selectedTask.priority) }]}>
-                        {selectedTask.priority === TaskPriority.LOW ? 'Низкий' :
-                         selectedTask.priority === TaskPriority.MEDIUM ? 'Средний' :
-                         selectedTask.priority === TaskPriority.HIGH ? 'Высокий' : 'Срочно'}
-                      </Text>
-                    </LinearGradient>
-                  </View>
-                </View>
-                
-                <View style={styles.dialogSection}>
-                  <Text style={dynamicStyles.dialogLabel}>
-                    Срок выполнения:
-                  </Text>
-                  <View style={styles.deadlineContainer}>
-                    <MaterialCommunityIcons 
-                      name="calendar-clock" 
-                      size={20}
-                      color={isDark ? Colors.dark.tint : Colors.light.tint}
-                      style={styles.dialogIcon}
-                    />
-                    <Text style={dynamicStyles.dialogDescription}>
-                      {formatDate(selectedTask.deadline)}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.dialogSection}>
-                  <Text style={dynamicStyles.dialogLabel}>
-                    Исполнитель:
-                  </Text>
-                  <View style={styles.assigneeContainer}>
-                    <Avatar.Image 
-                      size={32} 
-                      source={{ uri: getEmployeeById(selectedTask.assignedTo)?.avatarUrl }} 
-                      style={styles.dialogAvatar}
-                    />
-                    <View>
-                      <Text style={[styles.assigneeDialogName, { color: isDark ? Colors.dark.text : '#333' }]}>
-                        {getEmployeeById(selectedTask.assignedTo)?.name}
-                      </Text>
-                      <Text style={[styles.assigneeDialogPosition, { color: isDark ? '#aaa' : '#666' }]}>
-                        {getEmployeeById(selectedTask.assignedTo)?.position}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                
-                {user?.id === selectedTask.assignedTo && selectedTask.status !== TaskStatus.COMPLETED && selectedTask.status !== TaskStatus.CANCELLED && (
+                {/* Добавляем условие для показа действий для админа или ответственного */}
+                {(user?.role === UserRole.ADMIN || user?.id === selectedTask.assignedTo) && 
+                 (selectedTask.status !== TaskStatus.COMPLETED && selectedTask.status !== TaskStatus.CANCELLED) && (
                   <View style={styles.dialogActionsSection}>
                     <Text style={[dynamicStyles.dialogLabel, styles.actionsLabel]}>
                       Действия:
                     </Text>
                     <View style={styles.actionButtonsContainer}>
-                      {selectedTask.status === TaskStatus.ASSIGNED && (
+                      {/* Кнопки для всех пользователей */}
+                      {selectedTask.status === TaskStatus.ASSIGNED && user?.id === selectedTask.assignedTo && (
                         <Button 
                           mode="contained" 
                           onPress={() => handleChangeTaskStatus(selectedTask, TaskStatus.IN_PROGRESS)}
@@ -822,7 +852,7 @@ export default function TasksScreen() {
                         </Button>
                       )}
                       
-                      {selectedTask.status === TaskStatus.IN_PROGRESS && (
+                      {selectedTask.status === TaskStatus.IN_PROGRESS && user?.id === selectedTask.assignedTo && (
                         <Button 
                           mode="contained" 
                           onPress={() => handleChangeTaskStatus(selectedTask, TaskStatus.COMPLETED)}
@@ -832,6 +862,55 @@ export default function TasksScreen() {
                         >
                           Завершить
                         </Button>
+                      )}
+                      
+                      {/* Кнопки только для админа */}
+                      {user?.role === UserRole.ADMIN && (
+                        <View style={styles.adminButtonsContainer}>
+                          <Button 
+                            mode="contained" 
+                            onPress={() => goToEditTask(selectedTask)}
+                            style={[styles.actionButton, styles.adminButton]}
+                            buttonColor={isDark ? '#333' : '#6c757d'}
+                            icon="pencil"
+                          >
+                            Редактировать
+                          </Button>
+                          
+                          {selectedTask.status !== TaskStatus.COMPLETED && (
+                            <Button 
+                              mode="contained" 
+                              onPress={() => handleChangeTaskStatus(selectedTask, TaskStatus.COMPLETED)}
+                              style={[styles.actionButton, styles.adminButton]}
+                              buttonColor="#28a745"
+                              icon="check"
+                            >
+                              Завершить
+                            </Button>
+                          )}
+                          
+                          {selectedTask.status !== TaskStatus.CANCELLED && (
+                            <Button 
+                              mode="contained" 
+                              onPress={() => handleChangeTaskStatus(selectedTask, TaskStatus.CANCELLED)}
+                              style={[styles.actionButton, styles.adminButton]}
+                              buttonColor="#dc3545"
+                              icon="close"
+                            >
+                              Отменить
+                            </Button>
+                          )}
+                          
+                          <Button 
+                            mode="contained" 
+                            onPress={() => handleDeleteTask(selectedTask)}
+                            style={[styles.actionButton, styles.adminButton]}
+                            buttonColor="#dc3545"
+                            icon="delete"
+                          >
+                            Удалить задачу
+                          </Button>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -1097,9 +1176,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   actionButtonsContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
+    marginTop: 8,
   },
   actionButton: {
-    borderRadius: 8,
+    marginTop: 8,
+  },
+  adminButtonsContainer: {
+    marginTop: 8,
+  },
+  adminButton: {
+    marginBottom: 8,
   },
 }); 

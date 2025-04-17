@@ -50,6 +50,19 @@ export default function ProfileScreen() {
     setDarkModeEnabled(isDark);
   }, [isDark]);
 
+  // Обновляем локальное состояние, когда изменяются данные пользователя в контексте
+  useEffect(() => {
+    if (user) {
+      setUserData({
+        name: user.name || userData.name,
+        position: user.position || userData.position,
+        department: user.department || userData.department,
+        email: user.email || userData.email,
+      });
+      setAvatarUri(user.avatarUrl || avatarUri);
+    }
+  }, [user]);
+
   // Обработчик переключения темы
   const handleThemeToggle = (value: boolean) => {
     setDarkModeEnabled(value);

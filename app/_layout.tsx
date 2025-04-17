@@ -50,6 +50,9 @@ function AppContent() {
                 <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
                 <Stack.Screen name="(auth)/register" options={{ headerShown: false }} />
                 <Stack.Screen name="(auth)/forgot-password" options={{ headerShown: false }} />
+                <Stack.Screen name="account/edit" options={{ headerShown: false }} />
+                <Stack.Screen name="security/index" options={{ headerShown: false }} />
+                <Stack.Screen name="notifications/index" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
               </Stack>
             </TaskProvider>

@@ -9,6 +9,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
+  updateUser: (userData: Partial<User>) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -145,6 +146,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUser = async (userData: Partial<User>): Promise<boolean> => {
+    try {
+      if (!user) {
+        return false;
+      }
+      
+      // Обновляем пользователя с новыми данными
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      
+      // Сохраняем обновленные данные в AsyncStorage
+      await AsyncStorage.setItem('@auth_user', JSON.stringify(updatedUser));
+      return true;
+    } catch (error) {
+      console.error('Ошибка при обновлении профиля:', error);
+      return false;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -154,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         register,
         resetPassword,
+        updateUser,
       }}
     >
       {children}

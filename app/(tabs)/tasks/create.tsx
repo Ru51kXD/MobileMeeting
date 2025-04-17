@@ -23,10 +23,10 @@ import {
   Avatar,
   Divider
 } from 'react-native-paper';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../../context/AuthContext';
 import { useTask } from '../../../context/TaskContext';
-import { Task } from '../../../types';
+import { Task, TaskPriority, TaskStatus } from '../../../types';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -37,20 +37,6 @@ const PRIORITY_LOW = 'LOW';
 const PRIORITY_MEDIUM = 'MEDIUM';
 const PRIORITY_HIGH = 'HIGH';
 const PRIORITY_URGENT = 'URGENT';
-
-// Константы для статусов задач
-const STATUS_ASSIGNED = 'ASSIGNED';
-const STATUS_IN_PROGRESS = 'IN_PROGRESS';
-const STATUS_COMPLETED = 'COMPLETED';
-const STATUS_CANCELLED = 'CANCELLED';
-
-// Определим объект TaskStatus для использования в коде
-const TaskStatus = {
-  ASSIGNED: STATUS_ASSIGNED,
-  IN_PROGRESS: STATUS_IN_PROGRESS,
-  COMPLETED: STATUS_COMPLETED,
-  CANCELLED: STATUS_CANCELLED
-};
 
 // Временные данные сотрудников для демо
 const DEMO_EMPLOYEES = [
@@ -63,13 +49,16 @@ const DEMO_EMPLOYEES = [
 
 export default function CreateTaskScreen() {
   const { user } = useAuth();
-  const { addTask } = useTask();
+  const { addTask, tasks, updateTask } = useTask();
+  const params = useLocalSearchParams();
+  const taskId = params.taskId as string | undefined;
   
+  const [isEditMode, setIsEditMode] = useState(false);
   const [task, setTask] = useState<Partial<Task>>({
     title: '',
     description: '',
     deadline: new Date(Date.now() + 24 * 60 * 60 * 1000), // Завтра по умолчанию
-    priority: PRIORITY_MEDIUM,
+    priority: TaskPriority.MEDIUM,
     status: TaskStatus.ASSIGNED,
     assignedTo: user?.id || '',
     createdBy: user?.id || '',
@@ -93,15 +82,38 @@ export default function CreateTaskScreen() {
     { label: 'Через 2 недели', date: addDays(new Date(), 14) },
   ];
 
+  // Эффект для загрузки задачи, если мы в режиме редактирования
+  useEffect(() => {
+    if (taskId && tasks.length > 0) {
+      const existingTask = tasks.find(t => t.id === taskId);
+      if (existingTask) {
+        setIsEditMode(true);
+        setTask({
+          ...existingTask,
+          deadline: new Date(existingTask.deadline),
+          createdAt: new Date(existingTask.createdAt),
+          updatedAt: new Date(), // Обновляем время редактирования
+        });
+        
+        // Устанавливаем исполнителя
+        const assignee = DEMO_EMPLOYEES.find(emp => emp.id === existingTask.assignedTo);
+        if (assignee) {
+          setSelectedEmployee(assignee);
+          setAssignToMe(user?.id === assignee.id);
+        }
+      }
+    }
+  }, [taskId, tasks]);
+
   // Эффект для установки текущего пользователя при загрузке
   useEffect(() => {
-    if (user) {
+    if (user && !isEditMode) {
       const currentUser = DEMO_EMPLOYEES.find(emp => emp.id === user.id) || 
         { id: user.id, name: user.name || 'Текущий пользователь', avatarUrl: user.avatarUrl || 'https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff' };
       
       setSelectedEmployee(currentUser);
     }
-  }, [user]);
+  }, [user, isEditMode]);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -126,44 +138,77 @@ export default function CreateTaskScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleCreateTask = async () => {
+  const handleSaveTask = async () => {
     if (!validateForm()) {
       return;
     }
     
-    // Добавим комментарий, если он есть
-    const finalTask = {...task};
-    if (comment.trim()) {
-      finalTask.comments = [{
-        id: '1',
-        text: comment,
-        createdBy: user?.id || '',
-        createdAt: new Date(),
-        authorName: user?.name || 'Текущий пользователь'
-      }];
-    }
-    
     try {
-      // Используем функцию из контекста для добавления задачи
-      await addTask(finalTask as Omit<Task, 'id'>);
-      
-      // Показываем уведомление об успешном создании
-      Alert.alert(
-        'Задача создана',
-        'Задача успешно добавлена в систему',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back()
-          }
-        ]
-      );
+      if (isEditMode && taskId) {
+        // Обновляем существующую задачу
+        const updatedTask = {
+          ...task,
+          id: taskId,
+          updatedAt: new Date()
+        } as Task;
+        
+        // Добавим новый комментарий, если он есть
+        if (comment.trim()) {
+          const newComment = {
+            id: Date.now().toString(),
+            text: comment,
+            createdBy: user?.id || '',
+            createdAt: new Date(),
+            authorName: user?.name || 'Текущий пользователь'
+          };
+          
+          updatedTask.comments = [...(updatedTask.comments || []), newComment];
+        }
+        
+        await updateTask(updatedTask);
+        
+        Alert.alert(
+          'Задача обновлена',
+          'Изменения успешно сохранены',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.back()
+            }
+          ]
+        );
+      } else {
+        // Добавляем новую задачу
+        const finalTask = {...task};
+        if (comment.trim()) {
+          finalTask.comments = [{
+            id: Date.now().toString(),
+            text: comment,
+            createdBy: user?.id || '',
+            createdAt: new Date(),
+            authorName: user?.name || 'Текущий пользователь'
+          }];
+        }
+        
+        await addTask(finalTask as Omit<Task, 'id'>);
+        
+        Alert.alert(
+          'Задача создана',
+          'Задача успешно добавлена в систему',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.back()
+            }
+          ]
+        );
+      }
     } catch (error) {
       Alert.alert(
         'Ошибка',
-        'Не удалось создать задачу. Попробуйте еще раз.'
+        isEditMode ? 'Не удалось обновить задачу. Попробуйте еще раз.' : 'Не удалось создать задачу. Попробуйте еще раз.'
       );
-      console.error('Ошибка при создании задачи:', error);
+      console.error(isEditMode ? 'Ошибка при обновлении задачи:' : 'Ошибка при создании задачи:', error);
     }
   };
 
@@ -200,7 +245,7 @@ export default function CreateTaskScreen() {
     <View style={styles.container}>
       <Appbar.Header>
         <Appbar.BackAction onPress={handleCancel} />
-        <Appbar.Content title="Создание задачи" />
+        <Appbar.Content title={isEditMode ? "Редактирование задачи" : "Создание задачи"} />
       </Appbar.Header>
 
       <KeyboardAvoidingView
@@ -453,21 +498,83 @@ export default function CreateTaskScreen() {
             placeholder="Добавьте комментарий к создаваемой задаче"
           />
 
+          {/* Раздел выбора статуса - только для режима редактирования и только для админа */}
+          {isEditMode && user?.role === 'ADMIN' && (
+            <>
+              <View style={styles.sectionTitle}>
+                <Text style={styles.sectionTitleText}>Статус задачи</Text>
+              </View>
+              
+              <View style={styles.statusContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.statusButton,
+                    task.status === TaskStatus.ASSIGNED && styles.statusButtonSelected,
+                    { borderColor: '#6c757d' }
+                  ]}
+                  onPress={() => setTask({ ...task, status: TaskStatus.ASSIGNED })}
+                >
+                  <View style={[styles.statusIndicator, { backgroundColor: '#6c757d' }]} />
+                  <Text style={styles.statusText}>Назначена</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.statusButton,
+                    task.status === TaskStatus.IN_PROGRESS && styles.statusButtonSelected,
+                    { borderColor: '#fd7e14' }
+                  ]}
+                  onPress={() => setTask({ ...task, status: TaskStatus.IN_PROGRESS })}
+                >
+                  <View style={[styles.statusIndicator, { backgroundColor: '#fd7e14' }]} />
+                  <Text style={styles.statusText}>В процессе</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.statusButton,
+                    task.status === TaskStatus.COMPLETED && styles.statusButtonSelected,
+                    { borderColor: '#28a745' }
+                  ]}
+                  onPress={() => setTask({ ...task, status: TaskStatus.COMPLETED })}
+                >
+                  <View style={[styles.statusIndicator, { backgroundColor: '#28a745' }]} />
+                  <Text style={styles.statusText}>Выполнена</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.statusButton,
+                    task.status === TaskStatus.CANCELLED && styles.statusButtonSelected,
+                    { borderColor: '#dc3545' }
+                  ]}
+                  onPress={() => setTask({ ...task, status: TaskStatus.CANCELLED })}
+                >
+                  <View style={[styles.statusIndicator, { backgroundColor: '#dc3545' }]} />
+                  <Text style={styles.statusText}>Отменена</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          <View style={styles.sectionTitle}>
+            <Text style={styles.sectionTitleText}>Исполнитель</Text>
+          </View>
+
           <View style={styles.buttonContainer}>
-            <Button
-              mode="contained"
-              onPress={handleCreateTask}
-              style={styles.createButton}
-            >
-              Создать задачу
-            </Button>
-            
             <Button
               mode="outlined"
               onPress={handleCancel}
               style={styles.cancelButton}
             >
               Отмена
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSaveTask}
+              style={styles.createButton}
+            >
+              {isEditMode ? 'Сохранить' : 'Создать задачу'}
             </Button>
           </View>
         </ScrollView>
@@ -659,5 +766,37 @@ const styles = StyleSheet.create({
   employeeItemPosition: {
     fontSize: 14,
     color: '#666',
-  }
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  
+  statusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 8,
+    width: '48%',
+    marginBottom: 8,
+  },
+  
+  statusButtonSelected: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  
+  statusIndicator: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  
+  statusText: {
+    fontSize: 14,
+  },
 }); 
