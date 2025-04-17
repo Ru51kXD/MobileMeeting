@@ -557,6 +557,17 @@ export default function MeetingsScreen() {
                         icon="video"
                         buttonColor={isDark ? Colors.dark.tint : Colors.light.tint}
                         style={styles.joinMeetingButton}
+                        onPress={() => {
+                          setDetailDialogVisible(false);
+                          router.push({
+                            pathname: '/meeting-room',
+                            params: {
+                              meetingId: selectedMeeting.id,
+                              meetingTitle: selectedMeeting.title,
+                              organizer: selectedMeeting.organizer
+                            }
+                          });
+                        }}
                       >
                         Присоединиться
                       </Button>

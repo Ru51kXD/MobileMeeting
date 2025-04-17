@@ -179,11 +179,15 @@ export default function VideoMeetingsScreen() {
         { 
           text: 'Присоединиться', 
           onPress: () => {
-            // Здесь должен быть код для запуска видеозвонка
-            // В демо-версии просто показываем уведомление
-            Alert.alert('Успешно', `Вы присоединились к встрече ${meeting.title}`, [
-              { text: 'OK' }
-            ]);
+            // Переходим на экран видеоконференции, передавая необходимые параметры
+            router.push({
+              pathname: '/meeting-room',
+              params: { 
+                meetingId: meeting.id,
+                meetingTitle: meeting.title,
+                organizer: meeting.organizer
+              }
+            });
           } 
         }
       ]
